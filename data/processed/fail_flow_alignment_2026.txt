@@ -1,0 +1,657 @@
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Yeyao Ma 1 Chen Li 2 Xiaosong Zhang 3 Han Hu 3 Weidi Xie 1
+
+arXiv:2602.12155v1  [cs.CV]  12 Feb 2026
+
+Post-training of flow matching models—aligning the output distribution with a high-quality tar- get—is mathematically equivalent to imitation learning. While Supervised Fine-Tuning mim- ics expert demonstrations effectively, it cannot correct policy drift in unseen states. Preference optimization methods address this but require costly preference pairs or reward modeling. We propose Flow Matching Adversarial Imitation Learning (FAIL), which minimizes policy-expert divergence through adversarial training without explicit rewards or pairwise comparisons. We derive two algorithms: FAIL-PD exploits dif- ferentiable ODE solvers for low-variance path- wise gradients, while FAIL-PG provides a black- box alternative for discrete or computationally constrained settings. Fine-tuning FLUX with only 13,000 demonstrations from Nano Banana pro, FAIL achieves competitive performance on prompt following and aesthetic benchmarks. Fur- thermore, the framework generalizes effectively to discrete image and video generation, and func- tions as a robust regularizer to mitigate reward hacking in reward-based optimization. Code and data are available at https://github.com/ HansPolo113/FAIL.
+
+Figure 1. (a) We propose FAIL, an adversarial imitation learning framework for flow matching model. (b) With 13K limited data, FAIL significantly improved performance of FLUX baseline.
+
+ensuring the generation of aesthetically pleasing and prompt- faithful images. Currently, two primary paradigms govern this alignment phase: Supervised Fine-Tuning (SFT) and Preference Optimization (e.g., RLHF (Ouyang et al., 2022), DPO (Rafailov et al., 2023)). SFT serves as the founda- tional step, guiding the model to approximate the preferred distribution through direct demonstration. Preference Op- timization builds upon this by refining the model’s outputs based on comparative feedback or scalar rewards, pushing the policy toward regions of higher utility. Together, these methods enable the backbone of modern generative align- ment strategies.
+
+Flow Matching (Lipman et al., 2022; Liu et al., 2022) and Diffusion (Ho et al., 2020; Song et al., 2020) models have emerged as the dominant paradigms for image generation, enabling the synthesis of high-fidelity, diverse visual content. The training lifecycle of these models is generally bifurcated into two distinct stages: pretraining and post-training. Pre- training focuses on broad knowledge acquisition and mode coverage, allowing the model to learn the underlying physics of visual data. Conversely, post-training aims to align the model with a specific, high-quality “preferred distribution”,
+
+We propose that the objective of post-training—aligning the model’s output distribution with an ideal target distri- bution—is mathematically equivalent to Imitation Learn- ing (IL). Under this framework, SFT corresponds to Be- havioral Cloning (BC) (Pomerleau, 1991a). While data- efficient, SFT suffers from distribution shift problem, where the policy drifts when encountering states outside the expert demonstrations, leading to compounding errors. Preference Optimization methods (e.g., RLHF, DPO) effectively ad- dress this drift by utilizing comparative feedback. However, the widespread adoption of these methods is constrained by their reliance on high-quality preference data and the
+
+Preprint. February 13, 2026.
+
+1Shanghai Jiao Tong University 2Xi’an Jiaotong University 3Tencent. Correspondence to: Weidi Xie <weidi@sjtu.edu.cn>.
+
+complexity of training accurate reward models.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+• We demonstrate the efficacy of FAIL on the FLUX, show- ing that it achieves competitive performance with minimal, single-sample data and can serve as a stabilizer for other RL-based fine-tuning methods.
+
+Adversarial Imitation Learning (AIL) (Ho & Ermon, 2016; Fu et al., 2017a) emerges as a promising alternative that ad- dresses these limitations while maintaining robust alignment capabilities. Rather than relying on explicit reward model- ing or preference pairs, AIL minimizes the Jensen-Shannon divergence between the policy and expert distributions via a minimax game (Goodfellow et al., 2020). By employing a discriminator to distinguish between generated and expert samples, AIL provides a dense, learned training signal that guides the policy toward the target distribution.
+
+We introduce Flow Matching Adversarial Imitation Learning (FAIL), a framework for learning continuous nor- malizing flows from expert demonstrations without explicit reward functions. We formulate the problem as a minimax game between a generator policy πθ and a discriminator Dω. The objective is to find a policy that generates sam- ples indistinguishable from the expert distribution pE(x), minimizing the divergence:
+
+In this work, we introduce Flow Matching Adversarial Imitation Learning (FAIL), a framework that adapts ad- versarial imitation to continuous-time generative dynamics. We instantiate FAIL via two distinct gradient estimation mechanisms. The primary approach, FAIL-PD (Pathwise Derivative), is a white-box method that leverages the dif- ferentiable nature of the ODE solver in Flow Matching. By backpropagating the discriminator’s guidance directly through the denoising steps to the policy parameters, FAIL- PD provides a lower-variance, richer learning signal that results in superior final performance. As a supplementary approach, we introduce FAIL-PG (Policy Gradient), a black-box method utilizing the Score Function Estimator. FAIL-PG is essential for scenarios where direct backprop- agation is intractable—such as autoregressive generation with discrete tokens—or when computing gradients through a massive discriminator is computationally prohibitive.
+
+To solve this optimization, we propose two strategies for the policy update: FAIL-PD, which exploits the differentiability of the ODE solver to compute pathwise derivatives, and FAIL-PG, a black-box policy gradient approach leveraging a tractable likelihood ratio estimator.
+
+minθ maxω Ex∼pE[log Dω(x)] + Ex∼πθ[log(1 −Dω(x))]. (1)
+
+Unlike standard Reinforcement Learning (RL) settings where environment dynamics are unknown and non- differentiable, the “environment” in Flow Matching is a deterministic Ordinary Differential Equation (ODE) solver. This structure allows us to backpropagate the discrimina- tor’s learning signal directly through the generation process to update the vector field.
+
+2.1. FAIL-PD: Pathwise Derivative Optimization
+
+We empirically validate our approach by fine-tuning the FLUX (Labs, 2024) model using synthetic images from Gemini 3 Pro (Google, 2025) as the expert dataset. Cru- cially, our experimental setup restricts the data to a single expert image per prompt to simulate real-world scenarios where collecting preference pairs is impractical. Despite this challenging regime and a modest dataset size of 13,000 samples, FAIL delivers substantial performance gains. On UniGen-Bench, FAIL-PD improves the base model from 61.61 to 73.70, surpassing models like FLUX.1 Ultra. Simi- larly, on DPG-Bench, it boosts performance to 87.32. Fur- thermore, we demonstrate that FAIL integrates seamlessly into standard Reinforcement Learning frameworks, effec- tively stabilizing training and preventing reward hacking.
+
+In FAIL-PD, the policy generates a sample x0 by integrating the vector field vθ starting from noise ϵ ∼N(0, I). The discriminator Dω evaluates x0, acting as a differentiable reward function. Since the numerical integration steps (e.g., Euler or RK4) are differentiable operations, we can compute the exact gradient of the discriminator’s output with respect to the flow parameters θ via the chain rule.
+
+To reduce the computational cost of backpropagating through the entire trajectory, we employ a single-step de- noising approximation. Instead of unrolling the full ODE chain for every gradient step, we sample a random timestep t ∼U(0, 1), inject noise to obtain xt, and perform a sin- gle denoising step. We estimate the clean data x′ 0 via the following update rule:
+
+Our contributions can be summarized as follows:
+
+• We formulate the post-training of Flow Matching models as an Adversarial Imitation Learning problem, proposing the FAIL framework to bridge the gap between Super- vised Fine-Tuning and Reinforcement Learning.
+
+• We derive two practical algorithms: FAIL-PD, which utilizes pathwise derivatives for high-performance align- ment, and FAIL-PG, a flexible alternative for discrete or computationally constrained scenarios.
+
+where xt = (1 −t)x0 + tϵ is the interpolated state and ∆t corresponds to the step size used during inference. This approximation assumes local linearity of the vector field, al- lowing efficient updates to πθ at arbitrary timesteps without full trajectory generation. See Algorithm 1 for detail.
+
+x′ 0 = xt + ∆t · vθ(xt, t) −(t + ∆t)ϵ
+
+Algorithm 1 FAIL-PD: Flow Matching Adversarial Imita- tion Learning with Pathwise Derivative
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Algorithm 2 FAIL-PG: Flow Matching Adversarial Imita- tion Learning with Policy Gradient
+
+1: Input: Expert images xE ∼πE, initial policy πθ and discriminator Dω with parameters θ0, ω0 2: for i = 0, 1, 2, . . . do 3: Sample a batch of images {x(i) E } from xE 4: For each prompt of {x(i) E }, sample G image noise pairs (xj 0, ϵj) where ϵ ∼N(0, I) 5: Update discriminator from ωi to ωi+1 with gradient
+
+1: Input: Expert images xE ∼πE, initial policy, refer- ence policy and discriminator parameters θ0, θref, ω0 2: for iteration i = 0, 1, 2, . . . do 3: Sample a batch of images {x(i) E } from xE 4: For each prompt, sample G images {x(i) 0 } ∼πθi 5: Update discriminator from ωi to ωi+1 with gradient:
+
+6: For each (x0, ϵ), sample t ∼U(0, 1), obtain x′ 0 via single step denoising approximation using Equation 2 7: Update policy from θi to θi+1 with gradient
+
+ˆExE[∇ω log σ(Dω(xE))] + ˆEx0[∇ω log(1 −σ(Dω(x0)))]
+
+6: Compute rewards via updated discriminator Dωi+1:
+
+ˆEx(i) E [∇ω log σ(Dω(x(i) E ))] + ˆEx(i) 0 [∇ω log(1 −σ(Dω(x(i) 0 )))]
+
+ˆEx0,t,x1  −∇θ log σ(Dωi+1(x′ 0)) 
+
+7: Compute advantages within the G samples group Gk:
+
+r(x(i) 0 ) = −log(1 −σ(Dωi+1(x(i) 0 )))
+
+Theoretical Connection. FAIL-PD can be analyzed through the lens of the Deterministic Policy Gradient (DPG) (Silver et al., 2014) framework. In standard RL, DPG relies on a learned critic Q(s, a) to estimate gradients because the dynamics are unknown. Here, the ODE solver represents known, differentiable dynamics, and the discrimi- nator acts as the reward function. By differentiating through the solver, we implicitly compute the exact action-value gradient without a separate critic.
+
+8: Set θold ←θi 9: for epoch e = 1, . . . , E do 10: Take a KL-constrained FPO step with gradient:
+
+A(x(i) 0 ) = r(x(i) 0 ) −Ex′ 0∈Gk[r(x′ 0)] stdx′ 0∈Gk(r(x′ 0))
+
+ˆEx(i) 0 ∇θLFPO(θ) −β∇θKL(πθ||πθref)
+
+Consequently, FAIL-PD can be viewed as a low-variance, unbiased limit of DDPG (Lillicrap et al., 2015) applied to Imitation Learning, inheriting the local convergence proper- ties of Generative Adversarial Networks (GANs).
+
+11: end for 12: end for
+
+(FPO) (McAllister et al., 2025), which utilizes the Condi- tional Flow Matching (CFM) loss to update the Evidence Lower Bound (ELBO). We approximate the likelihood ra- tio r(θ) = πθ(x) πθold(x) via the difference in CFM losses and maximize the PPO-style (Schulman et al., 2017) clipped surrogate objective:
+
+While FAIL-PD is efficient, computing gradient can be com- putationally prohibitive for large-scale discriminators or intractable for discrete flow formulations. To address this, we present FAIL-PG, a policy gradient alternative that sim- plifies gradient estimation via a tractable expectation.
+
+2.2. FAIL-PG: Policy Gradient Optimization
+
+LFPO(θ) = min (r(θ)A(x), clip(r(θ), 1 −ϵ, 1 + ϵ)A(x)) ,
+
+r(θ) = exp (LCFM(θold, x) −LCFM(θ, x)) (3)
+
+Instead of differentiating through the dynamics, FAIL-PG treats the discriminator output as a scalar reward, r(x) = −log(1 −σ(Dω(x))), and reinforces trajectories that yield high rewards. This aligns with Generative Adversarial Imi- tation Learning (GAIL) (Ho & Ermon, 2016) but is adapted for the continuous flow matching setting.
+
+To ensure stability during image generation, we enforce a constraint based on the KL divergence between the current policy and a reference policy (e.g., the pre-trained model). Following the FPO derivation, this KL term is calculated as:
+
+KL(πθ||πref) = Ex∼πθ [LCFM(θref, x) −LCFM(θ, x)] . (4)
+
+A major challenge in applying policy gradients to flow mod- els is that previous works typically view the denoising steps as a Markov Decision Process (MDP), requiring the trans- formation of the ODE into an SDE for exact likelihood computation. This is computationally expensive to estimate. To bypass this, we leverage Flow Policy Optimization
+
+As shown in Algorithm 2, FAIL-PG follows the core frame- work of GAIL but replaces the TRPO (Schulman et al., 2015) step with FPO. We adopt a PPO-style update rule and utilize Group Relative Policy Optimization (GRPO) (Shao et al., 2024) to normalize advantages.
+
+Consequently, FAIL-PG can be viewed as an extension of GAIL to flow matching domain, providing a derivative-free
+
+policy optimization framework that maintains the generative quality of flow models while ensuring training stability.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+vision backbones (e.g., CLIP (Lundberg & Lee, 2017), DINO (Oquab et al., 2023; Sim´eoni et al., 2025)) as feature extractors, adding a set of lightweight projection heads on top intermediate features. While efficient, this approach re- lies solely on visual features, potentially limiting its ability to enforce text-image alignment.
+
+2.3. Analysis of Optimization Strategies
+
+Gradient vs Score-Based Dynamics. The core distinction between our methods lies in the density of the feedback sig- nal. FAIL-PD computes pathwise derivatives ∇xD(x), pro- viding a dense, directional gradient that explicitly informs the policy how to deform the vector field. This preserves the structural smoothness of the flow manifold, ensuring sta- bility and compatibility with inference-time constraints like Classifier-Free Guidance (CFG) (Ho & Salimans, 2022). Conversely, FAIL-PG relies on scalar rewards, acting as a “mode-seeking” operator that reinforces high-probability regions. While this enable rapid initial convergence by jumping to high reward modes, the lack of structural guid- ance results in higher variance and potential instability, i.e., model collapse, during extended training.
+
+Flow Matching (FM) Backbone. To capture multi-modal dependencies, we utilize the pre-trained flow model itself as the discriminator backbone. We load the model’s weights and attach a head to its intermediate feature maps and make all parameters trainable. This leverages the backbone’s inherent understanding of the joint text-image distribution.
+
+Vision-Language Model (VLM). For advanced semantic discrimination, we adapt Large Multimodal Models by feed- ing both the image and text prompt as input. We extract the hidden states of the final token to feed the discriminator head. To bridge the gap between generation and discrimi- nation tasks, we freeze the vision encoder but fine-tune the LLM parameters alongside the discriminator head.
+
+Applicability. These properties dictate distinct use cases. FAIL-PD is optimal choice for differentiable, white-box set- tings, offering the stability and precision required for large- scale training. FAIL-PG is strictly necessary for black-box or discrete scenarios where backpropagation is intractable, offering an efficient alternative when gradient access is re- stricted or fast convergence is a priority.
+
+3. Empirical Analysis
+
+In this section, we conduct a comprehensive evaluation of FAIL, analyzing its properties from multiple perspectives. We aim to demonstrate its efficacy as a general post-training framework capable of converging to a target distribution.
+
+Adversarial training is notoriously unstable, often suffering from mode collapse. These issues are exacerbated in high- dimensional image generation tasks. To stabilize training and accelerate convergence, we employ following strategies:
+
+2.4. Stabilizing Training
+
+Expert Data Construction. To ensure both high quality and semantic diversity in our target distribution, we curate prompts from a subset of HPDv3 (Ma et al., 2025) and UniGen-Bench (train-en-short split) (Wang et al., 2025a). We employ the frontier model, Gemini Pro 3 (Google, 2025), as our expert generator. Crucially, we generate only a single image per prompt. This constraint is designed to simulate realistic scenarios where obtaining multiple high-quality expert samples for a specific prompt is computationally expensive or infeasible. After filtering, we constructed a training dataset consisting of 13,000 prompt-image pairs.
+
+3.1. Experimental Setup
+
+Hybrid Imitation. Following (Ren et al., 2024), we utilize a hybrid batch strategy—training on a mixture of online policy samples and expert demonstrations. During the pol- icy update, we treat expert samples as “perfect” rollouts. This anchors the policy to the expert manifold, curtailing unnecessary exploration in the vast state space.
+
+Initialization and Warmup. We apply a cold start by initial- izing the policy via Behavior Cloning on expert demonstra- tions. Furthermore, we implement a discriminator warmup phase, freezing the policy for the initial steps to ensure the discriminator provides a meaningful learning signal before the generator begins adversarial adaptation.
+
+Implementation Details. We adopt FLUX.1-dev (Labs, 2024) as our policy network. For the discriminator, we primarily utilize a VLM-based architecture initialized with Qwen3-VL-2B-Instruct (Bai et al., 2025a). To validate ro- bustness, we also explore VFM and FM variants, instanti- ated with Dinov3b (Sim´eoni et al., 2025) and the original FLUX.1-dev backbone, respectively.
+
+The choice of discriminator architecture is critical for stabi- lizing adversarial training. Instead of training from scratch, we leverage pre-trained representations to provide robust gradients. We investigate three distinct architectures:
+
+2.5. Discriminator Architecture Design
+
+All models are optimized using AdamW (Loshchilov & Hutter, 2017) with a global batch size of 128. Training is distributed across 32 NVIDIA H20 GPUs, where each effec- tive batch consists of 3 policy rollouts and 1 expert demon- stration per prompt. Unless otherwise specified, ablations
+
+Visual Foundation Model (VFM). We employ pre-trained
+
+Table 1. Benchmark FAIL against preference Optimization meth- ods using same expert data. URScore stands for UnifiedReward.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+FLUX - 51.84 76.74 8.71 3.2965 SFT - 58.22 80.34 9.28 3.3063 RLHF-PD 50 59.76 81.65 10.18 3.3406 RLHF-PD 400 57.97 80.35 8.90 3.2564 RLHF-PG 50 55.81 78.68 8.03 3.2287 DPO-Online 400 62.83 84.25 10.73 3.4183
+
+Method Steps Unigen DPG HPSv3 URScore
+
+FAIL-PD (Ours) 400 62.17 84.14 10.82 3.3938 FAIL-PD (Ours) 800 63.38 84.55 11.17 3.4468 FAIL-PG (Ours) 400 64.75 84.59 11.41 3.4438
+
+Figure 2. Convergence dynamics of FAIL variants. PG converges rapidly but suffers from collapse, PD shows long-term stability.
+
+are conducted at 512 × 512 resolution for a single epoch (400 iterations), including a 25-step discriminator warmup phase. Comprehensive settings and detailed discriminator architectural specifications are provided in Appendix B.
+
+highlights a critical bottleneck: with only 13,000 samples, the learned reward model is too weak to provide a robust direction toward the true high-quality distribution.
+
+In contrast, FAIL achieves superior performance. Compar- ing Online DPO with FAIL-PG, we attribute FAIL’s lead to two primary distinctions:
+
+Evaluation Metrics. We focus on two primary dimensions: Prompt Following and Human Preference Alignment. For prompt following, we utilize UniGen-Bench (Wang et al., 2025a), and DPG-Bench (Silver et al., 2014) to as- sess zero-shot generalization. For preference alignment, we employ the Alchemist (Startsev et al., 2025) dataset, report- ing HPSv3 (Ma et al., 2025) for aesthetic quality and Uni- fiedReward (Wang et al., 2025b) for a holistic assessment of semantic and stylistic fidelity. Detailed evaluation protocols are provided in Appendix C. All samples are generated at 512×512 resolution with CFG disabled.
+
+1. Mitigating False Negatives: Online DPO rigidly penal- izes policy samples against expert data, creating “false negatives” when the policy generates high-quality im- ages. FAIL utilize discriminator to dynamically judge the quality of samples, allowing the model to reinforce its own valid outputs rather than being arbitrarily rejected.
+
+2. Information Density: While DPO compresses feedback into binary preference labels, FAIL utilizes continuous discriminator logits. By providing continuous feedback, FAIL ensures that every sample contributes richer infor- mation density than binary signal.
+
+We compare FAIL against standard preference optimization paradigms: Reinforcement Learning from Human Feedback (RLHF) and Direct Preference Optimization (DPO).
+
+3.2. Comparison with Preference Optimization
+
+Finally, we notice FAIL-PD improve slower than FAIL-PG, it takes 800 steps to achieve similar performance. To under- stand if this performance gap persists over longer training horizons, we further investigate the long-term dynamics and stability of both methods in Section 3.3.
+
+For RLHF, we train a specific reward model on expert- policy pairs and optimize the policy using both Policy Gra- dient (RLHF-PG) and Pathwise Derivative (RLHF-PD) esti- mators. For DPO, we implement an Online DPO baseline, which dynamically constructs preference pairs between ex- pert demonstrations and current policy rollouts to ensure training stability. Specific implementation details for these baselines are detailed in Appendix C.
+
+To empirically validate the “Gradient vs. Score-Base” dis- cussion in Section 2.3, we extend the training horizon to assess the long-term stability of both models. We use Uni- fied Reward metric as it reflect the overall performance of model. The training dynamics are illustrated in Figure 2.
+
+3.3. Convergence and Training Stability
+
+Intuitively, Online DPO can be viewed as a special case of FAIL-PG where the discriminator is assumed to be perfect (always distinguishing policy samples from expert samples) and provides a binarized reward signal.
+
+Analysis. The results shows a trade-off between conver- gence speed and stability of FAIL-PD and FAIL-PG:
+
+Analysis. The quantitative results are presented in Table 1. We observe that standard RLHF exhibits instability char- acteristic of reward hacking. While the optimization suc- cessfully increased the reward values during training, the ground-truth metrics degraded. Only early stage (50 steps) of RLHF-PD manages to outperform the SFT baseline. This
+
+1. Mode-Seeking vs. Manifold Preservation: Consistent with our analysis, FAIL-PG exhibits aggressive mode- seeking behavior, achieving rapid convergence with a high reward (> 3.43) within just 50 steps. However, this efficiency comes at the cost of stability: as training beyond 450 steps, the policy collapses, suggesting that
+
+Table 2. Impact of discriminator type. FAIL-PD benefit from stronger backbone while FAIL-PG is less sensitive to model choice.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Table 3. Integrating FAIL with reward model acts as a regularizer, preventing the reward hacking observed in standalone RL.
+
+FAIL-PD Dinov3 60.65 82.78 10.28 3.4013 FAIL-PD FLUX.1 62.70 84.18 12.35 3.4474 FAIL-PD Qwen3vl 62.17 84.14 10.82 3.3938
+
+Method Discriminator Unigen DPG HPSv3 URScore
+
+FAIL-PD 62.17 84.14 10.82 3.3938 Reward Gradient 58.50 82.15 12.21 3.4254 Reward Gradient+FAIL-PD 60.88 84.49 12.94 3.4832
+
+Method Unigen DPG HPSv3 URScore
+
+FAIL-PG Dinov3 64.23 84.50 11.30 3.4435 FAIL-PG FLUX.1 63.33 84.46 11.40 3.4496 FAIL-PG Qwen3vl 64.75 84.59 11.41 3.4438
+
+FAIL-PG 64.75 84.59 11.41 3.4438 FPO 61.27 84.11 12.56 3.4503 FPO+FAIL-PG 64.27 84.70 11.75 3.4531
+
+2. Long-Term Stability: In contrast, FAIL-PD demon- strates stability. While its initial improvement is more gradual, it maintains monotonic improvement well be- yond the policy gradient method. By step 2,000, FAIL- PD achieves a higher performance (3.4759) without ex- hibiting signs of collapse. This confirms that the dense gradient signal preserves the vector field’s structural in- tegrity, allowing for deeper, more robust optimization.
+
+scalar rewards alone may insufficient to constrain the pol- icy to the flow manifold during extended optimization.
+
+In contrast to the PD variant, FAIL-PG is notably less sen- sitive to the choice of discriminator. Since FAIL-PG uti- lizes the discriminator as a black-box scalar reward function rather than backpropagating through its gradients, it miti- gates the risk of the policy overfitting to specific artifacts in the discriminator’s feature space. Consequently, perfor- mance is relatively consistent across different architectures.
+
+mation loss associated with VAE decoding, making the training process more efficient and stable.
+
+3.5. Combine FAIL with reward model
+
+These results suggest that while FAIL-PG is preferable for rapid, compute-efficient adaptation, FAIL-PD is essential for high-fidelity, long-horizon training where stability and peak performance are more important. We conduct more visual analysis in Appendix D.1.
+
+A key distinction between FAIL and standard Reinforce- ment Learning (RL) approaches for flow matching is the source of the guidance signal: FAIL employs a dynami- cally updated discriminator to enforce distribution match- ing, whereas standard RL typically relies on a static reward model. This structural difference makes FAIL orthogonal to, and easily integratable with, existing RL frameworks.
+
+We analyze the impact of the discriminator type on the policy performance. We select typical models for three distinct discriminator categories. The comparative results are presented in Table 2.
+
+3.4. Design Choice of Discriminator
+
+To demonstrate this synergy, we combine FAIL with HPSv3- based reward optimization. We establish two baselines: Reward Gradient for the pathwise derivative setting and Flow Policy Optimization for the policy gradient setting. In these baselines, the discriminator is replaced by a frozen HPSv3 model. For the combined experiments:
+
+Analysis. For the FAIL-PD, the discriminator type signifi- cantly influences the final performance. The VFM baseline exhibits the lowest performance. We attribute this to two factors: 1) the lack of native text modality input, preventing the model from effectively judging text-image alignment, and 2) limited model capacity compared to other backbones, making the discriminator’s gradients easier to hacking.
+
+• FAIL-PD + Reward Gradient: We directly sum the losses derived from the FAIL and the Reward Gradient.
+
+Conversely, the FM backbone achieves the best overall per- formance, particularly in preference alignment. We attribute this superior performance to two key advantages:
+
+• FAIL-PG + FPO: We combine the signals by adding the independently normalized scores from the FAIL discrimi- nator and the HPSv3 before the policy update step.
+
+1. Rich Feature Extraction: FLUX is trained on massive high-quality image-text pairs. This extensive pre-training allows it to capture rich, dense semantic and aesthetic features, serving as a robust feature extractor that guides the policy toward a high-quality distribution.
+
+Analysis. As shown in Table 3, the standalone Reward Gra- dient method exhibits characteristic reward hacking: while the HPSv3 score improves, metrics such as Unigen and DPG degrade significantly. Which aligns with observations from prior work such as REFL (Xu et al., 2023) that gradient optimization is easily hacked.
+
+2. Latent Space Efficiency: Unlike other discriminators that operate in pixel space, the FM discriminator con- ducts judgments directly within latent space. This by- passes the computational overhead and potential infor-
+
+However, integrating FAIL-PD effectively mitigates this issue. The combined approach achieves the highest perfor- mance in both HPSv3 (12.94) and UnifiedReward (3.4832). This indicates that FAIL functions as a potent regularizer. By introducing a dynamic distribution-matching objective
+
+Table 4. Applying FAIL-PG to discrete image generation substan- tially improve performance over the SFT baseline on Xomni.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Table 6. Despite limited data, FAIL achieve a competitive results on DPG, demonstrating zero-shot generalization capabilities.
+
+Xomni 28.32 73.08 6.84 3.1933 Xomni SFT 41.36 75.24 7.97 3.2501 Xomni FAIL-PG 54.24 80.94 9.91 3.3591
+
+Method Unigen DPG HPSv3 URScore
+
+Hunyuan-DiT (Li et al., 2024b) 84.59 80.59 88.01 74.36 86.41 78.87 Janus (Wu et al., 2025a) 82.33 87.38 87.70 85.46 86.41 79.68 Emu3-Gen (Wang et al., 2024) 85.21 86.68 86.84 90.22 83.15 80.60 FLUX.1 Dev (Labs, 2024) 74.35 90.00 88.96 90.87 88.33 83.84 SD3 Medium (Esser et al., 2024) 87.90 91.01 88.83 80.70 88.68 84.08 Janus-Pro-7B (Chen et al., 2025) 86.90 88.90 89.40 89.32 89.48 84.19 Z-Image-Turbo (Cai et al., 2025) 91.29 89.59 90.14 92.16 88.68 84.86 GPT-Image-1 High (OpneAI, 2025) 88.89 88.94 89.84 92.63 90.96 85.15 Seedream 3.0 (Gao et al., 2025) 94.31 92.65 91.36 92.78 88.24 88.27 Qwen-Image (Wu et al., 2025b) 91.32 91.56 92.02 94.31 92.73 88.32
+
+Model Global Entity Attribute Relation Other Overall
+
+Table 5. FAIL generalizes effectively to video domain, yielding significant gains in semantic scores on VBench.
+
+Wan2.1 68.53 76.43 36.93 Wan2.1 SFT 73.02 79.71 46.27 Wan2.1 FAIL-PD 74.77 81.20 49.07 Wan2.1 FAIL-PG 75.71 81.70 51.75
+
+Method Overall Quality Score Semantic Score
+
+These results indicate that FAIL is a general-purpose prefer- ence optimization framework capable of generalizing effec- tively beyond standard diffusion-based image generation.
+
+FAIL-PD (Ours) 85.00 91.65 90.22 92.52 91.62 87.32 FAIL-PG (Ours) 89.19 91.68 90.18 92.36 88.43 86.42
+
+4. System Level Comparison
+
+alongside static reward maximization, FAIL prevents the pol- icy from collapsing into narrow, high-reward modes (over- fitting), thereby solving the reward hacking problem while simultaneously enhancing diversity. A similar performance also observed when combining FAIL-PG with FPO. See Appendix D.2 for visualization.
+
+To validate the comprehensive capabilities of FAIL, we benchmark our framework against frontier text-to-image models, focusing on two dimensions of generation quality: prompt adherence and aesthetic fidelity. We compare FAIL against a wide range of competitive baselines. All FAIL- PD and FAIL-PG samples are generated using the same checkpoints across all benchmarks at a 512×512 resolution with optimal Classifier-Free Guidance (CFG).
+
+3.6. Generalize to other modality
+
+To demonstrate universality, we extend FAIL to discrete image and video generation.
+
+Discrete Image Generation. We utilize Xomni (Geng et al., 2025), applying FAIL-PG to the model’s autoregressive LLM component to align token generation.
+
+Prompt Adherence and Limitations. We assess the model’s ability to follow complex text instructions using DPG-Bench and UniGen-Bench. As shown in Table 6, FAIL significantly enhances the capabilities of its base model, FLUX.1 Dev. FAIL-PD achieves an overall DPG score of 87.32, surpassing the base model by 3.48 points and reach- ing parity with frontier models such as Seedream.
+
+Video Generation. We apply FAIL to Wan2.1-1.3B (Wan et al., 2025), using prompts sampled from VidProM (Wang & Yang, 2024) and Wan2.2-A14B as expert. Performance is evaluated using the VBench (Huang et al., 2024).
+
+Table 7 presents evaluation results on Unigen. Trained on only 13,000 demonstrations, FAIL-PD achieves an overall score of 73.70, marking a substantial improvement over the FLUX.1 Dev baseline (61.61) and outperforming closed- source models like FLUX.1 Ultra and Imagen-3.0.
+
+Detailed experimental configurations for both modalities are provided in Appendix C.
+
+Analysis. Table 4 demonstrates the effectiveness of FAIL in the discrete domain. Applying FAIL-PG to Xomni yields significant performance gains. Unlike continuous diffusion models, discrete generation models often suffer from the training-inference gap in next-token prediction frameworks. The use of an online training method like FAIL effectively alleviates this gap as we use online samples to update policy.
+
+However, a closer inspection of the “Text” category in Table 7 reveals a critical insight regarding the boundaries of post- training alignment. While FAIL-PD improves text rendering performance from the baseline’s 32.18 to 52.87, a significant gap remains compared to leading models like Qwen-Image (76.14). This suggests that while FAIL can effectively un- lock and refine capabilities present in the latent space, it is ultimately bounded by the base model’s pre-training. If the underlying character recognition or spelling capabilities are not robustly established during the pre-training stage, alignment methods alone cannot bridge the gap to frontier performance in these specific modalities.
+
+Furthermore, FAIL integrates seamlessly into video genera- tion tasks without modification. As shown in Table 5, FAIL significantly improves the Semantic Score on VBench. We attribute the smaller relative gain in Quality Score to the absence of CFG during rollout. Video generation models typically rely heavily on large CFG scales for visual fidelity; optimizing samples in a CFG-free setting presents a greater challenge, yet FAIL still achieve notable gain.
+
+Aesthetic Fidelity. In terms of human preference alignment, the results on the HPDv3 Benchmark (Table 8) demonstrate that FAIL-PD does not merely preserve the base model’s
+
+Table 7. FAIL significantly outperforms the FLUX baseline and competitive frontier in Unigen Bench.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Hunyuan-DiT (Li et al., 2024b) 49.05 62.71 41.62 44.78 55.48 24.55 59.64 94.10 1.15 80.70 51.38 FLUX.1 Dev (Labs, 2024) 62.17 67.84 47.04 71.84 60.96 30.91 67.21 83.90 32.18 88.92 61.30 Janus-Pro-7B (Chen et al., 2025) 64.26 67.74 62.11 72.01 64.44 37.05 68.40 90.80 2.59 86.71 61.61 SD3.5 Large (Esser et al., 2024) 62.17 68.59 58.76 69.03 58.96 32.27 69.80 88.60 32.76 88.92 62.99 FLUX.1 Ultra (Labs, 2024) 76.50 76.50 67.78 81.54 70.70 43.18 77.54 90.60 37.36 91.61 70.67 Z-Image-Turbo (Cai et al., 2025) 69.30 74.54 63.03 78.36 64.57 39.68 71.57 90.00 70.69 92.25 71.40 Imagen-3.0 (Baldridge et al., 2024) 81.46 77.33 71.71 81.34 69.84 48.36 82.86 89.25 21.55 94.75 71.85 FLUX-Kontext-Pro (Labs et al., 2025) 77.66 79.20 72.68 84.47 72.69 55.68 79.34 94.78 50.29 91.61 75.84 Qwen-Image (Wu et al., 2025b) 84.13 87.61 73.32 85.52 60.29 53.64 79.70 95.10 76.14 94.30 78.81 Seedream 3.0 (Gao et al., 2025) 82.98 85.58 73.84 87.31 61.36 52.73 80.84 98.10 71.55 95.25 78.98
+
+Model Action Attribute Compound Layout Grammar Reasoning Relationship Style Text World Knowledge Overall
+
+Table 8. FAIL achieve the highest overall score on HPDv3, confirming the effective internalization of the expert’s aesthetics.
+
+FAIL-PD (Ours) 74.81 79.59 70.62 83.02 65.11 44.04 80.20 94.50 52.87 92.25 73.70 FAIL-PG (Ours) 72.81 77.03 67.65 82.84 66.98 43.35 78.17 94.80 51.44 91.30 72.64
+
+Hunyuan-DiT (Li et al., 2024b) 7.96 8.11 8.28 8.71 7.24 7.86 8.33 8.55 8.28 8.31 8.48 8.20 8.19 Gemini 2.0 Flash 9.98 8.44 7.64 10.11 9.42 9.01 9.74 9.64 9.55 10.16 7.61 9.23 9.21 PixArt-Σ (Chen et al., 2024) 10.08 9.07 8.41 9.83 8.86 8.87 9.44 9.57 9.52 9.73 10.35 8.58 9.37 CogView4 (Zheng et al., 2024) 10.72 9.86 9.33 9.88 9.16 9.45 9.69 9.86 9.45 9.49 10.16 8.97 9.61 Infinity (Han et al., 2025) 11.17 9.95 9.43 10.36 9.27 10.11 10.36 10.59 10.08 10.30 10.59 9.62 10.26 Playground-v2.5 (Li et al., 2024a) 11.07 9.84 9.64 10.45 10.38 9.94 10.51 10.62 10.15 10.62 10.84 9.39 10.27 FLUX.1 Dev (Labs, 2024) 11.70 10.32 9.39 10.93 10.38 10.01 10.84 11.24 10.21 10.38 11.24 9.16 10.43 Kolors (Team, 2024) 11.79 10.47 9.87 10.82 10.60 9.89 10.68 10.93 10.50 10.63 11.06 9.51 10.55
+
+Model Characters Arts Design Architecture Animals Natural Scenery Transportation Products Plants Food Science Others All
+
+FAIL-PD (Ours) 11.91 10.16 10.30 12.22 11.29 10.96 12.18 11.92 11.70 12.00 9.59 11.40 11.28 FAIL-PG (Ours) 11.33 9.48 9.30 11.66 10.62 10.42 11.61 11.24 11.02 11.57 8.93 10.63 10.65
+
+quality but enhances it by a large margin. FAIL-PD achieves an overall score of 11.28, significantly outperforming the FLUX.1 Dev baseline of 10.43.
+
+training with GAN-style objectives to improve perceptual quality. Methods such as DiffusionGAN (Wang et al., 2022), DDGAN (Xiao et al., 2021), UFOGen (Xu et al., 2024), and SiDDM (Gong et al., 2023) introduce discriminators on generated samples or intermediate diffusion states, comple- menting diffusion objectives with gan loss.
+
+5.1. Preference Optimization for Text-to-Image Models
+
+While Supervised Fine-Tuning (SFT) on curated datasets (e.g., Emu (Dai et al., 2023)) improves generation quality, it often fails to capture fine-grained human preferences. To address this, RLHF employing explicit Reward Models (RM) has been widely adopted. These approaches generally fall into two categories: Reward Gradient methods (Xu et al., 2023; Clark et al., 2023; Shen et al., 2025), which steer the model using reward score gradients, and Policy Gradient methods (Black et al., 2023; Xue et al., 2025b; Liu et al., 2025), which treat denoising as a sequential decision- making process to maximize expected reward.
+
+Another line of work uses adversarial learning for diffusion model distillation. Approaches including ADD (Sauer et al., 2024b), LADD (Sauer et al., 2024a), and DMD2 (Yin et al., 2024) employ adversarial objectives to transfer knowledge from a multi-step diffusion teacher to a more efficient stu- dent, enabling high-quality generation with substantially fewer sampling steps.
+
+5.3. Imitation Learning
+
+Imitation Learning (IL) aim to train a policy that match the expert demonstrations. There are two board categories of IL approaches: behavioral cloning (BC) (Pomerleau, 1991b; Ross et al., 2011) and inverse reinforcement learning (IRL) (Ziebart et al., 2008; Abbeel & Ng, 2004). BC train a policy using regression to directly mimic the expert. While IRL jointly infer the policy and reward function.
+
+To mitigate the instability and reward hacking associated with explicit reward modeling, Direct Preference Optimiza- tion (Rafailov et al., 2023) offers a stable alternative. Meth- ods like Diffusion-DPO (Wallace et al., 2024) bypass the reward model, optimizing directly on preference pairs to implicitly maximize human alignment without the need for a explicit reward model.
+
+5.2. Adversarial Training for Diffusion Models
+
+Scaling IRL to large environments has been a major chal- lenge, Adversarial Imitation Learning (AIL) offers a promis- ing solution, AIL aim to directly match the state-action dis- tributions of an agent and an expert through adversarial train- ing. Generative adversarial imitation learning (GAIL) (Ho & Ermon, 2016) and its extensions (Fu et al., 2017b) train a generator policy to imitate expert and a discriminator
+
+Adversarial training has been explored in diffusion models mainly in two settings. One line of work augments diffusion
+
+to differentiate them, which resembles the idea of GANs. Over the past years, many improvements (Orsini et al., 2021; Kostrikov et al., 2018) have been proposed to en- hance GAIL’s efficiency and robustness, and GAIL has been widely applied to various domains (Wulfmeier et al., 2024; Ye et al., 2025; Mao et al., 2025).
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Yang, M., Yang, J., Yang, A., Yu, B., Zhang, F., Zhang, H., Zhang, X., Zheng, B., Zhong, H., Zhou, J., Zhou, F., Zhou, J., Zhu, Y., and Zhu, K. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631, 2025a.
+
+Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang, K., Wang, P., Wang, S., Tang, J., Zhong, H., Zhu, Y., Yang, M., Li, Z., Wan, J., Wang, P., Ding, W., Fu, Z., Xu, Y., Ye, J., Zhang, X., Xie, T., Cheng, Z., Zhang, H., Yang, Z., Xu, H., and Lin, J. Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923, 2025b.
+
+While FAIL presents a robust framework for post-training alignment, there remains limitations. First, adversarial train- ing introduces optimization complexities, despite our stabi- lization strategies, the training objective remains sensitive to hyperparameter and model design. Second, our experimen- tal validation limited to a modest data size (13K), leaving the scaling of FAIL as an open question. Finally, the FAIL is ultimately bounded by the base model’s pre-training, as evi- denced by the persistent gap in text rendering performance, alignment methods like FAIL act as effective refiners but cannot synthesize fundamental capabilities that were not established during the pre-training stage.
+
+Baldridge, J., Bauer, J., Bhutani, M., Brichtova, N., Bunner, A., Castrejon, L., Chan, K., Chen, Y., Dieleman, S., Du, Y., et al. Imagen 3. arXiv preprint arXiv:2408.07009, 2024.
+
+Black, K., Janner, M., Du, Y., Kostrikov, I., and Levine, S. Training diffusion models with reinforcement learning. arXiv preprint arXiv:2305.13301, 2023.
+
+Cai, H., Cao, S., Du, R., Gao, P., Hoi, S., Hou, Z., Huang, S., Jiang, D., Jin, X., Li, L., et al. Z-image: An efficient image generation foundation model with single-stream diffusion transformer. arXiv preprint arXiv:2511.22699, 2025.
+
+We presented FAIL, a framework that formulates generative model post-training as adversarial imitation learning. FAIL overcomes the distribution shift problem of Supervised Fine- Tuning while eliminating the need for preference pairs or reward models required by RLHF and DPO. Our two op- timization strategies—FAIL-PD for differentiable settings and FAIL-PG for discrete or black-box scenarios—achieve competitive performance using only 13,000 Gemini demon- strations. Beyond serving as a standalone alignment method, FAIL acts as an effective regularizer against reward hack- ing when combined with explicit reward optimization. The framework also generalizes to discrete image generation and video synthesis, establishing adversarial imitation learning as a versatile paradigm for generative alignment.
+
+Chen, J., Ge, C., Xie, E., Wu, Y., Yao, L., Ren, X., Wang, Z., Luo, P., Lu, H., and Li, Z. Pixart-σ: Weak-to-strong training of diffusion transformer for 4k text-to-image generation. In European Conference on Computer Vision, pp. 74–91. Springer, 2024.
+
+Chen, X., Wu, Z., Liu, X., Pan, Z., Liu, W., Xie, Z., Yu, X., and Ruan, C. Janus-pro: Unified multimodal understand- ing and generation with data and model scaling. arXiv preprint arXiv:2501.17811, 2025.
+
+Clark, K., Vicol, P., Swersky, K., and Fleet, D. J. Directly fine-tuning diffusion models on differentiable rewards. arXiv preprint arXiv:2309.17400, 2023.
+
+Abbeel, P. and Ng, A. Y. Apprenticeship learning via inverse reinforcement learning. In Proceedings of the twenty-first international conference on Machine learning, pp. 1, 2004.
+
+Dai, X., Hou, J., Ma, C.-Y., Tsai, S., Wang, J., Wang, R., Zhang, P., Vandenhende, S., Wang, X., Dubey, A., et al. Emu: Enhancing image generation models us- ing photogenic needles in a haystack. arXiv preprint arXiv:2309.15807, 2023.
+
+Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., Ge, W., Guo, Z., Huang, Q., Huang, J., Huang, F., Hui, B., Jiang, S., Li, Z., Li, M., Li, M., Li, K., Lin, Z., Lin, J., Liu, X., Liu, J., Liu, C., Liu, Y., Liu, D., Liu, S., Lu, D., Luo, R., Lv, C., Men, R., Meng, L., Ren, X., Ren, X., Song, S., Sun, Y., Tang, J., Tu, J., Wan, J., Wang, P., Wang, P., Wang, Q., Wang, Y., Xie, T., Xu, Y., Xu, H., Xu, J., Yang, Z.,
+
+Esser, P., Kulal, S., Blattmann, A., Entezari, R., M¨uller, J., Saini, H., Levi, Y., Lorenz, D., Sauer, A., Boesel, F., et al. Scaling rectified flow transformers for high-resolution image synthesis. In Forty-first international conference on machine learning, 2024.
+
+Fu, J., Luo, K., and Levine, S. Learning robust rewards with adversarial inverse reinforcement learning. arXiv preprint arXiv:1710.11248, 2017a.
+
+Fu, J., Luo, K., and Levine, S. Learning robust rewards with adversarial inverse reinforcement learning. arXiv preprint arXiv:1710.11248, 2017b.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Kumari, N., Zhang, R., Shechtman, E., and Zhu, J.-Y. En- sembling off-the-shelf models for gan training. In Pro- ceedings of the IEEE/CVF conference on computer vision and pattern recognition, pp. 10651–10662, 2022.
+
+Gao, Y., Gong, L., Guo, Q., Hou, X., Lai, Z., Li, F., Li, L., Lian, X., Liao, C., Liu, L., et al. Seedream 3.0 technical report. arXiv preprint arXiv:2504.11346, 2025.
+
+Geng, Z., Wang, Y., Ma, Y., Li, C., Rao, Y., Gu, S., Zhong, Z., Lu, Q., Hu, H., Zhang, X., et al. X-omni: Reinforcement learning makes discrete autoregressive image generative models great again. arXiv preprint arXiv:2507.22058, 2025.
+
+Kurach, K., Lucic, M., Zhai, X., Michalski, M., and Gelly, S. The gan landscape: Losses, architectures, regularization, and normalization. arXiv preprint arXiv:1807.04720, 2018.
+
+Gong, M., Xie, S., Wei, W., Grundmann, M., Batmanghe- lich, K., Hou, T., et al. Semi-implicit denoising diffusion models (siddms). Advances in Neural Information Pro- cessing Systems, 36:17383–17394, 2023.
+
+Labs, B. F. Flux. https://github.com/ black-forest-labs/flux, 2024.
+
+Labs, B. F., Batifol, S., Blattmann, A., Boesel, F., Con- sul, S., Diagne, C., Dockhorn, T., English, J., English, Z., Esser, P., et al. Flux. 1 kontext: Flow matching for in-context image generation and editing in latent space. arXiv preprint arXiv:2506.15742, 2025.
+
+Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley, D., Ozair, S., Courville, A., and Bengio, Y. Generative adversarial networks. Communications of the ACM, 63(11):139–144, 2020.
+
+Li, D., Kamko, A., Akhgari, E., Sabet, A., Xu, L., and Doshi, S. Playground v2. 5: Three insights towards enhancing aesthetic quality in text-to-image generation. arXiv preprint arXiv:2402.17245, 2024a.
+
+Google. Gemini 3 pro image (nano banana pro), Novem- ber 2025. URL https://deepmind.google/ models/gemini-image/pro/.
+
+Han, J., Liu, J., Jiang, Y., Yan, B., Zhang, Y., Yuan, Z., Peng, B., and Liu, X. Infinity: Scaling bitwise autoregressive modeling for high-resolution image synthesis. In Pro- ceedings of the Computer Vision and Pattern Recognition Conference, pp. 15733–15744, 2025.
+
+Li, Z., Zhang, J., Lin, Q., Xiong, J., Long, Y., Deng, X., Zhang, Y., Liu, X., Huang, M., Xiao, Z., et al. Hunyuan- dit: A powerful multi-resolution diffusion transformer with fine-grained chinese understanding. arXiv preprint arXiv:2405.08748, 2024b.
+
+Lillicrap, T. P., Hunt, J. J., Pritzel, A., Heess, N., Erez, T., Tassa, Y., Silver, D., and Wierstra, D. Continuous control with deep reinforcement learning. arXiv preprint arXiv:1509.02971, 2015.
+
+Ho, J. and Ermon, S. Generative adversarial imitation learn- ing. Advances in neural information processing systems, 29, 2016.
+
+Lipman, Y., Chen, R. T., Ben-Hamu, H., Nickel, M., and Le, M. Flow matching for generative modeling. arXiv preprint arXiv:2210.02747, 2022.
+
+Ho, J. and Salimans, T. Classifier-free diffusion guidance. arXiv preprint arXiv:2207.12598, 2022.
+
+Ho, J., Jain, A., and Abbeel, P. Denoising diffusion proba- bilistic models. Advances in neural information process- ing systems, 33:6840–6851, 2020.
+
+Liu, J., Liu, G., Liang, J., Li, Y., Liu, J., Wang, X., Wan, P., Zhang, D., and Ouyang, W. Flow-grpo: Training flow matching models via online rl. arXiv preprint arXiv:2505.05470, 2025.
+
+Huang, Z., He, Y., Yu, J., Zhang, F., Si, C., Jiang, Y., Zhang, Y., Wu, T., Jin, Q., Chanpaisit, N., et al. Vbench: Compre- hensive benchmark suite for video generative models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 21807–21818, 2024.
+
+Liu, X., Gong, C., and Liu, Q. Flow straight and fast: Learning to generate and transfer data with rectified flow. arXiv preprint arXiv:2209.03003, 2022.
+
+Kingma, D. and Gao, R. Understanding diffusion objectives as the elbo with simple data augmentation. Advances in Neural Information Processing Systems, 36:65484– 65516, 2023.
+
+Loshchilov, I. and Hutter, F. Decoupled weight decay regu- larization. arXiv preprint arXiv:1711.05101, 2017.
+
+Kostrikov, I., Agrawal, K. K., Dwibedi, D., Levine, S., and Tompson, J. Discriminator-actor-critic: Addressing sam- ple inefficiency and reward bias in adversarial imitation learning. arXiv preprint arXiv:1809.02925, 2018.
+
+Lundberg, S. M. and Lee, S.-I. A unified approach to inter- preting model predictions. Advances in neural informa- tion processing systems, 30, 2017.
+
+Ma, Y., Wu, X., Sun, K., and Li, H. Hpsv3: Towards wide- spectrum human preference score, 2025. URL https: //arxiv.org/abs/2508.03789.
+
+Mao, W., Chen, H., Yang, Z., and Shou, M. Z. The im- age as its own reward: Reinforcement learning with ad- versarial reward for image generation. arXiv preprint arXiv:2511.20256, 2025.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Sauer, A., Boesel, F., Dockhorn, T., Blattmann, A., Esser, P., and Rombach, R. Fast high-resolution image synthe- sis with latent adversarial diffusion distillation. In SIG- GRAPH Asia 2024 Conference Papers, pp. 1–11, 2024a.
+
+Sauer, A., Lorenz, D., Blattmann, A., and Rombach, R. Ad- versarial diffusion distillation. In European Conference on Computer Vision, pp. 87–103. Springer, 2024b.
+
+McAllister, D., Ge, S., Yi, B., Kim, C. M., Weber, E., Choi, H., Feng, H., and Kanazawa, A. Flow matching policy gradients. arXiv preprint arXiv:2507.21053, 2025.
+
+Schulman, J., Levine, S., Abbeel, P., Jordan, M., and Moritz, P. Trust region policy optimization. In International conference on machine learning, pp. 1889–1897. PMLR, 2015.
+
+OpneAI. Gpt-image-1, 2025. URL https://openai.com/index/ introducing-4o-image-generation/.
+
+Oquab, M., Darcet, T., Moutakanni, T., Vo, H., Szafraniec, M., Khalidov, V., Fernandez, P., Haziza, D., Massa, F., El- Nouby, A., et al. Dinov2: Learning robust visual features without supervision. arXiv preprint arXiv:2304.07193, 2023.
+
+Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347, 2017.
+
+Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push- ing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300, 2024.
+
+Orsini, M., Raichuk, A., Hussenot, L., Vincent, D., Dadashi, R., Girgin, S., Geist, M., Bachem, O., Pietquin, O., and Andrychowicz, M. What matters for adversarial imitation learning? Advances in Neural Information Processing Systems, 34:14656–14668, 2021.
+
+Shen, X., Li, Z., Yang, Z., Zhang, S., Zhang, Y., Li, D., Wang, C., Lu, Q., and Tang, Y. Directly aligning the full diffusion trajectory with fine-grained human preference. arXiv preprint arXiv:2509.06942, 2025.
+
+Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems, 35:27730–27744, 2022.
+
+Silver, D., Lever, G., Heess, N., Degris, T., Wierstra, D., and Riedmiller, M. Deterministic policy gradient algorithms. In International conference on machine learning, pp. 387– 395. Pmlr, 2014.
+
+Pomerleau, D. A. Efficient training of artificial neural net- works for autonomous navigation. Neural computation, 3(1):88–97, 1991a.
+
+Sim´eoni, O., Vo, H. V., Seitzer, M., Baldassarre, F., Oquab, M., Jose, C., Khalidov, V., Szafraniec, M., Yi, S., Rama- monjisoa, M., Massa, F., Haziza, D., Wehrstedt, L., Wang, J., Darcet, T., Moutakanni, T., Sentana, L., Roberts, C., Vedaldi, A., Tolan, J., Brandt, J., Couprie, C., Mairal, J., J´egou, H., Labatut, P., and Bojanowski, P. DINOv3, 2025. URL https://arxiv.org/abs/2508.10104.
+
+Pomerleau, D. A. Efficient training of artificial neural net- works for autonomous navigation. Neural computation, 3(1):88–97, 1991b.
+
+Song, J., Meng, C., and Ermon, S. Denoising diffusion implicit models. arXiv preprint arXiv:2010.02502, 2020.
+
+Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Ermon, S., and Finn, C. Direct preference optimiza- tion: Your language model is secretly a reward model. Advances in neural information processing systems, 36: 53728–53741, 2023.
+
+Startsev, V., Ustyuzhanin, A., Kirillov, A., Baranchuk, D., and Kastryulin, S. Alchemist: Turning public text-to-image data into generative gold. arXiv preprint arXiv:2505.19297, 2025.
+
+Ren, J., Swamy, G., Wu, Z. S., Bagnell, J. A., and Choud- hury, S. Hybrid inverse reinforcement learning. arXiv preprint arXiv:2402.08848, 2024.
+
+Team, K. Kolors: Effective training of diffusion model for photorealistic text-to-image synthesis. arXiv preprint, 2024.
+
+Ross, S., Gordon, G., and Bagnell, D. A reduction of imita- tion learning and structured prediction to no-regret online learning. In Proceedings of the fourteenth international conference on artificial intelligence and statistics, pp. 627–635. JMLR Workshop and Conference Proceedings, 2011.
+
+Wallace, B., Dang, M., Rafailov, R., Zhou, L., Lou, A., Purushwalkam, S., Ermon, S., Xiong, C., Joty, S., and Naik, N. Diffusion model alignment using direct pref- erence optimization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pp. 8228–8238, 2024.
+
+Wan, T., Wang, A., Ai, B., Wen, B., Mao, C., Xie, C.-W., Chen, D., Yu, F., Zhao, H., Yang, J., Zeng, J., Wang, J., Zhang, J., Zhou, J., Wang, J., Chen, J., Zhu, K., Zhao, K., Yan, K., Huang, L., Feng, M., Zhang, N., Li, P., Wu, P., Chu, R., Feng, R., Zhang, S., Sun, S., Fang, T., Wang, T., Gui, T., Weng, T., Shen, T., Lin, W., Wang, W., Wang, W., Zhou, W., Wang, W., Shen, W., Yu, W., Shi, X., Huang, X., Xu, X., Kou, Y., Lv, Y., Li, Y., Liu, Y., Wang, Y., Zhang, Y., Huang, Y., Li, Y., Wu, Y., Liu, Y., Pan, Y., Zheng, Y., Hong, Y., Shi, Y., Feng, Y., Jiang, Z., Han, Z., Wu, Z.-F., and Liu, Z. Wan: Open and advanced large-scale video generative models. arXiv preprint arXiv:2503.20314, 2025.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Xu, J., Liu, X., Wu, Y., Tong, Y., Li, Q., Ding, M., Tang, J., and Dong, Y. Imagereward: Learning and evaluat- ing human preferences for text-to-image generation. Ad- vances in Neural Information Processing Systems, 36: 15903–15935, 2023.
+
+Xu, Y., Zhao, Y., Xiao, Z., and Hou, T. Ufogen: You forward once large scale text-to-image generation via diffusion gans. In Proceedings of the IEEE/CVF Confer- ence on Computer Vision and Pattern Recognition, pp. 8196–8206, 2024.
+
+Xue, S., Ge, C., Zhang, S., Li, Y., and Ma, Z.-M. Ad- vantage weighted matching: Aligning rl with pretraining in diffusion models. arXiv preprint arXiv:2509.25050, 2025a.
+
+Wang, W. and Yang, Y. Vidprom: A million-scale real prompt-gallery dataset for text-to-video diffusion models. Advances in Neural Information Processing Systems, 37: 65618–65642, 2024.
+
+Xue, Z., Wu, J., Gao, Y., Kong, F., Zhu, L., Chen, M., Liu, Z., Liu, W., Guo, Q., Huang, W., et al. Dancegrpo: Unleashing grpo on visual generation. arXiv preprint arXiv:2505.07818, 2025b.
+
+Wang, X., Zhang, X., Luo, Z., Sun, Q., Cui, Y., Wang, J., Zhang, F., Wang, Y., Li, Z., Yu, Q., et al. Emu3: Next-token prediction is all you need. arXiv preprint arXiv:2409.18869, 2024.
+
+Ye, T., Dong, L., Chi, Z., Wu, X., Huang, S., and Wei, F. Black-box on-policy distillation of large language models. arXiv preprint arXiv:2511.10643, 2025.
+
+Wang, Y., Li, Z., Zang, Y., Zhou, Y., Bu, J., Wang, C., Lu, Q., Jin, C., and Wang, J. Pref-grpo: Pairwise preference reward-based grpo for stable text-to-image reinforcement learning. arXiv preprint arXiv:2508.20751, 2025a.
+
+Yin, T., Gharbi, M., Park, T., Zhang, R., Shechtman, E., Du- rand, F., and Freeman, B. Improved distribution matching distillation for fast image synthesis. Advances in neural information processing systems, 37:47455–47487, 2024.
+
+Wang, Y., Zang, Y., Li, H., Jin, C., and Wang, J. Unified re- ward model for multimodal understanding and generation. arXiv preprint arXiv:2503.05236, 2025b.
+
+Zheng, W., Teng, J., Yang, Z., Wang, W., Chen, J., Gu, X., Dong, Y., Ding, M., and Tang, J. Cogview3: Finer and faster text-to-image generation via relay diffusion. In European Conference on Computer Vision, pp. 1–22. Springer, 2024.
+
+Wang, Z., Zheng, H., He, P., Chen, W., and Zhou, M. Diffusion-gan: Training gans with diffusion. arXiv preprint arXiv:2206.02262, 2022.
+
+Wu, C., Chen, X., Wu, Z., Ma, Y., Liu, X., Pan, Z., Liu, W., Xie, Z., Yu, X., Ruan, C., et al. Janus: Decoupling visual encoding for unified multimodal understanding and generation. In Proceedings of the Computer Vision and Pattern Recognition Conference, pp. 12966–12977, 2025a.
+
+Ziebart, B. D., Maas, A. L., Bagnell, J. A., Dey, A. K., et al. Maximum entropy inverse reinforcement learning. In Aaai, volume 8, pp. 1433–1438. Chicago, IL, USA, 2008.
+
+Wu, C., Li, J., Zhou, J., Lin, J., Gao, K., Yan, K., Yin, S.-m., Bai, S., Xu, X., Chen, Y., et al. Qwen-image technical report. arXiv preprint arXiv:2508.02324, 2025b.
+
+Wulfmeier, M., Bloesch, M., Vieillard, N., Ahuja, A., Born- schein, J., Huang, S., Sokolov, A., Barnes, M., Desjardins, G., Bewley, A., et al. Imitating language via scalable inverse reinforcement learning. Advances in Neural In- formation Processing Systems, 37:90714–90735, 2024.
+
+Xiao, Z., Kreis, K., and Vahdat, A. Tackling the generative learning trilemma with denoising diffusion gans. arXiv preprint arXiv:2112.07804, 2021.
+
+A. Derivation of the KL Divergence
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+In FAIL-PG, we employ a KL divergence constraint to prevent the policy πθ from deviating exxcessively from the reference policy πref. The constraint is formulated as:
+
+KL(πθ||πref) = Ex∼πθ [LCFM(θref, x) −LCFM(θ, x)] . (5)
+
+The original FPO does not introduce this KL term. Here, we provide the brief derivation of this expression based on the conection between the Conditional Flow Matching(CFM) objective and the Evidence Lower Bound (ELBO).
+
+A.1. Relationship betwwen Log-Likelihood and CFM Loss
+
+For Continuous Normalizing Flows (CNFs) trained via Flow Matching, the generative probability path is defined by a vector field vt. As established by Kingma (Kingma & Gao, 2023) and utilized in recent reinforcement learning frameworks (McAl- lister et al., 2025; Xue et al., 2025a) for diffusion, the weighted flow matching loss LCF M(θ, x) is mathematically equivalent to the negative ELBO of the data, up to a constant C that only depends on the noise schedule and data distribution, but not on the learnable parameters θ: logπθ(x) ≥ELBOθ(x) = −LCF M(θ, x) + C. (6)
+
+In the context of Flow Policy Optimization (FPO), this ELBO is treated as a tight proxy for the true log-likelihood. Therefore, we approximate the log-probability of a sample x under policy πθ as:
+
+logπθ(x) ≈−LCF M(θ, x) + C. (7)
+
+The Kullback-Leibler (KL) divergence between the current policy πθ and the reference policy πref is defined as:
+
+A.2. Derivation of the KL Term
+
+DKL(πθ||πref) = Ex∼πθ
+
+ = Ex∼πθ [log πθ(x) −log πref(x)] .
+
+Substituting the ELBO approximation for the log-likelihoods of both the current policy and the reference policy:
+
+DKL(πθ||πref) ≈Ex∼πθ [(−LCFM(θ, x) + C) −(−LCFM(θref, x) + C)]
+
+Crucially, because the constant C is independent of the model parameters θ, it cancels out in the difference. This allows us to estimate the KL divergence efficiently by comparing the flow matching losses of the generated sample x under the reference weights θref and the current weights θ, without requiring expensive ODE integration to compute the exact likelihood change of variable.
+
+= Ex∼πθ [−LCFM(θ, x) + C + LCFM(θref, x) −C]
+
+= Ex∼πθ [LCFM(θref, x) −LCFM(θ, x)] .
+
+B. Detailed Experimental Settings
+
+B.1. Discriminator Architectures
+
+Followed by (Kurach et al., 2018; Kumari et al., 2022), we design specific projection heads for different discriminator backbones to ensure effective gradient flow:
+
+• VFM and FM Variants: For Dinov3b and FLUX.1-dev backbones, we uniformly extract intermediate features from the network layers. These features are processed by a discriminator head consisting of a LayerNorm, followed by a linear projection to logits with spectral normalization.
+
+• VLM Variant (Base): For the Qwen3-VL-2B-Instruct backbone, we employ a streamlined architecture. We extract the hidden states of the EOS token from the final layer and map them directly to logits via a single linear layer.
+
+Unless otherwise noted, all experiments utilize the global hyperparameters listed in Table 9. We utilize the AdamW optimizer for both the policy and the discriminator
+
+B.2. Global Configuration
+
+Table 9. Global Hyperparameters. These settings are shared across all tasks (Image, Video, Discrete) unless specified otherwise.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Optimizer AdamW Optimizer Momentum (β1, β2) (0.9, 0.999) Weight Decay 0.0 Gradient Accumulation Steps 1 Mixed Precision BF16 Gradient Clipping (Policy) 1.0 Gradient Clipping (Discriminator) 1.0 Global Batch Size 128 KL coefficient β for FAIL-PG 0.05
+
+We tune the learning rates for the policy (lrθ) and discriminator (lrω) independently for each base model to ensure stability. Table 10 summarizes the specific learning rates used for the results reported in Section 3
+
+B.3. Task-Specific Learning Rates
+
+Table 10. Detailed Learning Rate Configuration. We independently tune the policy learning rate (lrθ) and discriminator learning rate (lrω) for each algorithm and task to ensure stability.
+
+Method Discriminator Policy LR (lrθ) Disc. LR (lrω)
+
+Task: Image Generation (Base: FLUX.1-Dev)
+
+FAIL-PD Dinov3 1.0 × 10−5 1.0 × 10−5
+
+Qwen3-VL 1.0 × 10−5 2.0 × 10−6
+
+FLUX.1 5.0 × 10−6 1.0 × 10−5
+
+FAIL-PG Dinov3 1.0 × 10−5 1.0 × 10−5
+
+Qwen3-VL 1.0 × 10−5 2.0 × 10−6
+
+FLUX.1 1.0 × 10−5 2.0 × 10−5
+
+Task: Video Generation (Base: Wan2.1-1.3B) FAIL-PD Wan2.1 2.0 × 10−6 1.0 × 10−5
+
+FAIL-PG Wan2.1 2.0 × 10−6 1.0 × 10−5
+
+Task: Discrete Image Generation (Base: Xomni-SFT) FAIL-PG Dinov3 5.0 × 10−6 5.0 × 10−6
+
+C. Detailed Evaluation and Baseline Settings
+
+C.1. Evaluation Protocols
+
+Our evaluation framework is designed to capture diverse aspects of generation quality:
+
+• Prompt Following: We utilize the en-short split of UniGen-Bench (Wang et al., 2025a), comprising 600 prompts synthesized by Gemini Pro 2.5. Evaluation is performed using the official offline pipeline powered by Qwen-72B (Bai et al., 2025b) for ablation, and official Gemini 2.5 Pro api for System Level Comparison. To assess zero-shot generalization, we additionally evaluate on DPG-Bench (Silver et al., 2014), which contains 1,065 diversity-focused prompts.
+
+• Human Preference Alignment: We employ the Alchemist (Startsev et al., 2025) dataset, a collection of 3,350 prompts cu- rated from web-scraped sources. We report HPSv3 (Ma et al., 2025) to measure aesthetic quality and UnifiedReward (Wang et al., 2025b) (specifically the UnifiedReward-2.0-qwen3vl-8b variant) to assess semantic alignment and coherence.
+
+For inference, we generate 4 images per prompt for UniGen and DPG, and 1 image per prompt for Alchemist. All samples are generated with 28 steps at 512 × 512 resolution with Classifier-Free Guidance (CFG) disabled for ablation.
+
+C.2. Baseline Implementation Details
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+RLHF Setup. We first train a reward model utilizing the same architecture as our VLM discriminator. We construct preference pairs by treating expert data as the chosen response and policy rollouts as the rejected response, training the reward model for 1 epoch using the Bradley-Terry (BT) loss. Following reward modeling, we freeze the network and optimize the policy using the respective gradient estimators.
+
+Online DPO Setup. We found standard DPO unstable when trained on fixed datasets in this domain. Therefore, we implement Online DPO, where we dynamically construct preference pairs during training. The current policy’s rollout is treated as the rejected sample, and the corresponding expert data is treated as the chosen sample. This effectively simulates a “perfect” discriminator that always prefers the expert distribution.
+
+Discrete Image Generation Setup. We utilize Xomni (Geng et al., 2025), a unified multimodal model capable of both image understanding and generation. Xomni employs an LLM to autoregressively generate discrete image tokens, which are subsequently rendered into images via a diffusion decoder. We initialize the policy using Xomni weights prior to any RL alignment. Using the same dataset construction method as in our continuous image settings, we encode expert images into tokens and apply FAIL-PG to the LLM component. We employ DINOv3b (Sim´eoni et al., 2025) as the discriminator backbone, as our empirical results suggest FAIL-PG is robust to the choice of discriminator architecture in discrete settings.
+
+Video Generation Setup. We evaluate video generation capabilities using the VidProM (Wang & Yang, 2024) dataset.
+
+• Dataset & Expert: We sample a subset of 8,192 prompts from VidProM. We utilize Wan2.2-A14B (Wan et al., 2025) as the expert generator. For each prompt, we generate a single expert video at a resolution of 480 × 480 with a duration of 81 frames.
+
+• Policy & Training: We use Wan2.1-1.3B as the student policy. The discriminator architecture mirrors the Flow Matching backbone setting used in our image experiments, adapted to process the spatiotemporal latents of the video model.
+
+D. Visualization Analysis
+
+We visualize the training dynamics discussed in Section 3.3 to qualitatively assess convergence behavior. All samples are generated without Classifier-Free Guidance (CFG). For FAIL-PD, we display generation results at steps 100, 800, and 2,000 in Figure 3. Consistent with our analysis, FAIL-PD demonstrates monotonic improvement as training progresses, with the student distribution progressively aligning with the expert demonstrations in terms of both style and structure.
+
+D.1. Visualization of Training Dynamics
+
+Given the rapid convergence of FAIL-PG, we present results at steps 0 (SFT baseline), 100, and 400 in Figure 4. We observe distinct phases of improvement: between steps 0 and 100, the model achieves a rapid boost in overall visual quality and semantic alignment. Subsequently, from step 100 to 400, the optimization shifts focus to refining low-level details, resulting in significant improvements in text rendering and fine-grained textures.
+
+To further validate FAIL’s capability as a regularizer against reward hacking, we compare the qualitative results of standalone FAIL-PD, standalone Reward Gradient (optimizing HPSv3 (Ma et al., 2025)), and their combination in Figure 5.
+
+D.2. Visualization of Reward Model Integration
+
+As observed in the first column, optimizing HPSv3 alone leads to severe reward hacking, characterized by oversaturation and unnatural high-frequency artifacts. However, combining this objective with FAIL (second column) effectively mitigates these phenomena. The combined approach preserves the structural integrity and naturalness of the images while successfully inheriting the aesthetic improvements from the HPSv3 reward signal.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Figure 3. The visualization results of FAIL-PD in different training steps. FAIL-PD show consistence improvement and distribution alignment to the expert demonstrations.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Figure 4. FAIL-PG convergence rapidly, it improve the overall quality first, then optimize the fine-grained detail.
+
+FAIL: Flow Matching Adversarial Imitation Learning for Image Generation
+
+Figure 5. Integrate FAIL with reward model could alleviate the reward hacking phenomenon.

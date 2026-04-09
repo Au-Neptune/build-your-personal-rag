@@ -1,0 +1,535 @@
+Alignment and Safety of Diﬀusion Models via Reinforcement Learning and Reward Modeling: A Survey
+
+Preeti Lamba1, Kiran Ravish1, Ankita Kushwaha1, and Pawan Kumar1
+
+1International Institute of Information Technology, Hyderabad
+
+arXiv:2505.17352v1  [cs.CV]  23 May 2025
+
+Diﬀusion models have emerged as leading generative models for images and other modal- ities, but aligning their outputs with human preferences and safety constraints remains a critical challenge. This thesis proposal investigates methods to align diﬀusion models using reinforcement learning (RL) and reward modeling. We survey recent advances in ﬁne-tuning text-to-image diﬀusion models with human feedback, including reinforcement learning from human and AI feedback, direct preference optimization, and diﬀerentiable reward approaches. We classify these methods based on the type of feedback (human, automated, binary or ranked preferences), the ﬁne-tuning technique (policy gradient, reward-weighted likelihood, direct backpropagation, etc.), and their eﬃciency and safety outcomes. We compare key al- gorithms and frameworks, highlighting how they improve alignment with user intent or safety standards, and discuss inter-relationships such as how newer methods build on or diverge from earlier ones. Based on the survey, we identify ﬁve promising research directions for the next two years: (1) multi-objective alignment with combined rewards, (2) eﬃcient human feedback usage and active learning, (3) robust safety alignment against adversarial inputs, (4) continual and online alignment of diﬀusion models, and (5) interpretable and trustworthy reward modeling for generative images. Each direction is elaborated with its problem state- ment, challenges, related work, and a proposed research plan. The proposal is organized as a comprehensive document with literature review, comparative tables of methods, and detailed research plans, aiming to contribute new insights and techniques for safer and value-aligned diﬀusion-based generative AI.
+
+Keywords: Diﬀusion models, alignment, safety, reinforcement learning, human feedback, reward modeling, preference optimization, generative AI.
+
+2 Background: Diﬀusion Models and Alignment Problem 3 2.1 Diﬀusion Models for Generative AI . . . . . . . . . . . . . . . . . . . . . . . . . . . 3 2.2 Alignment and Safety in Generative Models . . . . . . . . . . . . . . . . . . . . . . 4
+
+3 Literature Review of Alignment Methods for Diﬀusion Models 6 3.1 RLHF for Diﬀusion: Policy Gradient Approaches . . . . . . . . . . . . . . . . . . . 6 3.2 Reward Modeling and Preference Data for Diﬀusion . . . . . . . . . . . . . . . . . 8 3.3 Diﬀerentiable Reward Fine-Tuning (Backpropagation-Based) . . . . . . . . . . . . 10 3.4 Safety-Speciﬁc and Region-Speciﬁc Alignment Techniques . . . . . . . . . . . . . . 11 3.5 Summary of Methods and Comparative View . . . . . . . . . . . . . . . . . . . . . 12
+
+4 Inter-Paper Relationships and Methodological Progress 14 4.1 From RLHF to Direct Optimization . . . . . . . . . . . . . . . . . . . . . . . . . . 14 4.2 Incorporating Inductive Biases of Diﬀusion . . . . . . . . . . . . . . . . . . . . . . 14 4.3 Shared Use of Data and Models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 4.4 Complementary Nature of Approaches . . . . . . . . . . . . . . . . . . . . . . . . . 15 4.5 Incremental Improvements . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15 4.6 Competitive Benchmarks . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16
+
+5 Open Problems and Research Directions 16
+
+Generative diﬀusion models have achieved remarkable success in producing high-quality images from text prompts, demonstrating state-of-the-art results in text-to-image synthesis Ho et al. [2020], Dhariwal and Nichol [2021], Nichol and Dhariwal [2021], Rombach et al. [2022], Nichol et al. [2022], Saharia et al. [2022]. Models such as DALL-E, Imagen, and Stable Diﬀusion represent a paradigm shift in how AI can create content, with applications ranging from art generation to data augmentation. Despite their power, these models are typically trained on broad internet data via maximum likelihood objectives, which do not necessarily align model outputs with what humans consider desirable or safe Deng et al. [2024a], Prabhudesai et al. [2024]. As a result, unaligned diﬀusion models may produce content that is mismatched with user intent (e.g., failing to follow certain prompt details Lee et al. [2023]), oﬀensive or unsafe (due to learned biases or harmful data in training sets Yang et al. [2024a]), or otherwise not in line with human aesthetic preferences Xu et al. [2023]. Alignment of generative models refers to steering model behavior toward human values, prefer- ences, and safety constraints. In natural language processing, signiﬁcant progress has been made by techniques like reinforcement learning from human feedback (RLHF) Ouyang et al. [2022]. Notably, large language models have been ﬁne-tuned to follow instructions and avoid harmful out- puts using human preference data and policy optimization (e.g., InstructGPT and ChatGPT were trained via RLHF) Christiano et al. [2017]. These successes have motivated analogous eﬀorts to align image generation models. However, aligning diﬀusion models poses unique challenges: the output is high-dimensional (images), feedback can be expensive (requiring human comparisons of images), and direct optimization is complicated by the iterative denoising process of diﬀusion Yang et al. [2024a]. This proposal focuses on reinforcement learning and reward modeling approaches to alignment in diﬀusion models. In this context, reward modeling refers to training a proxy model (reward function) that reﬂects human preferences or safety criteria, which the genera- tive model can then be optimized against Ouyang et al. [2022]. Reinforcement learning refers to treating the generative process as a decision-making policy to be improved via feedback signals (rewards). Recent work has explored a spectrum of approaches
+
+• Using human feedback to train reward models for images (e.g., aesthetic or relevance scores) Xu et al. [2023] and then applying RL or related optimization to ﬁne-tune the diﬀusion model to increase those rewards Fan et al. [2023].
+
+• Reinforcement learning from human feedback (RLHF) for images: collecting human prefer- ence data (e.g., which of two images better matches a prompt) and using policy gradient methods (or variants) to adjust the model Lee et al. [2023].
+
+• Direct Preference Optimization (DPO) methods: optimizing the model directly on prefer- ence data without an explicit reward model by turning preference comparisons into a loss Rafailov et al. [2023].
+
+• Diﬀerentiable reward ﬁne-tuning: techniques that backpropagate reward gradients through the diﬀusion sampling process, avoiding high-variance RL estimators Clark et al. [2024].
+
+• Addressing safety-speciﬁc alignment: methods focusing on reducing harmful content while preserving quality Xing et al. [2025a], for example by optimizing against a “safety reward” or ﬁltering mechanism.
+
+Despite these eﬀorts, many open problems remain. Early studies showed that naive ﬁne-tuning on human feedback can lead to alignment–ﬁdelity trade-oﬀs Lee et al. [2023]: improving prompt alignment might degrade image ﬁdelity or diversity. Over-optimizing against a learned reward model can cause reward hacking where the generative model ﬁnds loopholes in the reward that do not correspond to genuinely better images Yang et al. [2024a], Zhang et al. [2024a]. Ensuring safety (avoiding nudity, violence, or bias) is particularly challenging; it often requires additional precautions since simply instructing the model via text may not suﬃce. The feedback data itself can be expensive to gather and might not cover the full space of prompts and user intents we care about, raising questions of generalization and scalability Xu et al. [2023] Uehara et al. [2024a]. In this thesis, we aim to advance the alignment of diﬀusion models along two axes: (1) de- veloping and understanding algorithms for alignment (with a comprehensive review of existing methods), and (2) proposing new research directions to address current limitations in alignment and safety. We will explore the following:
+
+• A literature review and taxonomy of current alignment methods for diﬀusion models, espe- cially those using RL or reward models.
+
+• Critical analysis of how these methods diﬀer in objectives (e.g. human preference vs. auto- mated aesthetic reward), optimization strategy (policy gradient vs. direct backpropagation, etc.), data eﬃciency, and outcomes on alignment and safety.
+
+• Identiﬁcation of gaps and challenges (such as reward overoptimization, need for large human feedback datasets, multi-aspect alignment diﬃculties, etc.).
+
+• Five concrete research proposals to tackle key challenges, each scoped for a 2-year investiga- tion.
+
+The rest of this document is organized as follows. In Section 2, we provide background on diﬀusion models and formalize the alignment problem in this context. Section 3 presents a com- prehensive literature review of recent approaches to align diﬀusion models with RL and reward modeling, grouped into categories (with summary tables for comparison). Section 4 discusses re- lationships between these works, pointing out how techniques have evolved to overcome previous shortcomings. Section 5 then introduces ﬁve proposed research directions, each with detailed dis- cussion of the problem, related work, and methodology plans. Finally, Section 6 concludes with how these research directions together aim to ensure diﬀusion models can be safely and eﬀectively deployed in alignment with human users.
+
+2 Background: Diﬀusion Models and Alignment Problem
+
+2.1 Diﬀusion Models for Generative AI
+
+Diﬀusion models are a class of generative models that learn to synthesize data by reversing a noising process. Originally developed as Denoising Diﬀusion Probabilistic Models (DDPMs) Ho et al. [2020], they have become a dominant approach for image generation. In a typical text-to-image diﬀusion model (e.g., Stable Diﬀusion), the model starts from random noise and iteratively denoises it to produce an image, guided by a text prompt. Formally, a diﬀusion model deﬁnes a forward process that gradually adds noise to an image x0 over T steps, producing latent xT ∼N(0, I), and a learned reverse model pθ(xt−1|xt, c) that predicts the previous step given the current noisy
+
+image xt and condition c (such as text) Ramesh et al. [2022a]. After training on a large image- text dataset to approximate the true distribution of images conditioned on text, the model can generate high ﬁdelity images for new prompts. The success of diﬀusion models in image generation is evident in their photorealism and di- versity of outputs Ho et al. [2020], Dhariwal and Nichol [2021], Song et al. [2021], Ramesh et al. [2022b], Rombach et al. [2022]. However, being trained on broad data with a simple objective (usually a noise prediction loss equating to maximizing image likelihood), these models often reﬂect undesired aspects of their training corpus
+
+• Prompt Misalignment: The model sometimes fails to accurately fulﬁll all aspects of the user’s prompt (e.g., getting object counts or colors wrong) Lee et al. [2023]. This occurs be- cause the model optimizes for likelihood, not necessarily semantic faithfulness to the prompt (especially for rare or complex prompt conditions).
+
+• Undesired Content: They may output explicit or violent imagery if prompted, or even without explicit prompting, due to learning from such content in training data. Biases present in the training data (e.g., stereotypes) can also manifest in outputs.
+
+• Quality Issues: The model might generate low-quality images under some conditions—blurry or artifact-ridden results—particularly if the user’s notion of quality (sharpness, aesthetics) is not explicitly part of the training objective Xu et al. [2023].
+
+Addressing these issues is crucial for practical deployment. Users typically want models that not only produce realistic images, but also follow instructions accurately and refrain from disal- lowed content. This is where the notion of alignment comes into play.
+
+2.2 Alignment and Safety in Generative Models
+
+We deﬁne alignment as the process of modifying a model such that its outputs and behavior adhere to speciﬁed human preferences or values. In the context of diﬀusion models, this could mean:
+
+• Ensuring the generated image closely matches the user’s intent (as described by the text prompt).
+
+• Optimizing images for human-preferred qualities like aesthetic appeal Xu et al. [2023] or realism.
+
+Safety is a subset of alignment focusing on preventing harmful outcomes. A safely aligned diﬀusion model should refuse or alter prompts aiming to produce disallowed content, and generally reduce the presence of bias or toxicity in its output. The alignment problem can be seen as one of extra objectives on top of the original generative modeling goal. The base model learns pθ(x|c) for images x given prompt c. We now want θ to also maximize some reward function R(x, c) that captures our alignment goals. For example, R might be high if the image is photorealistic and matches the prompt, or zero if the image is unsafe. In language models, R is often given by a learned preference model or by human judgments. However, directly incorporating these objectives into diﬀusion models is non-trivial. If R(x, c) is not diﬀerentiable or given implicitly (e.g., via human comparisons), standard training has to be adapted. Moreover, the diﬀusion model’s output is generated through many intermediate steps xT →· · · →x0, which complicates credit assignment (did a misalignment issue arise from an early step or later step?).
+
+• Avoiding outputs that are oﬀensive, unsafe, or violate policy (e.g., hate symbols, gore, NSFW content).
+
+Reinforcement Learning Formulation: We can conceptualize the diﬀusion sampling process as a Markov Decision Process (MDP) where:
+
+• The action is the choice of denoising step to xt−1.
+
+• The state can be the current diﬀusion step xt.
+
+• The policy πθ corresponds to the diﬀusion model’s conditional distribution at each step.
+
+• A reward R is obtained at the end of the diﬀusion (only at t = 0, when a complete image is generated) based on how aligned the result is.
+
+This MDP is unusual because the policy is already a pretty strong model (pre-trained diﬀusion), and we get a sparse reward at the end. Standard RL algorithms could, in principle, ﬁne-tune πθ to maximize expected reward Ex∼πθ[R(x, c)] for prompts c. Indeed, some works have applied policy gradient methods to diﬀusion models treating it exactly this way Deng et al. [2024a], Fan et al. [2023] (Deng et al. [2024a] does not rely on policy gradients, but discusses issues with policy gradients). Another perspective is reward-weighted regression or preference optimization. If we have a dataset of outputs with preference labels (e.g., A is better than B for a given prompt), one can update the model to increase likelihood of preferred outputs over non-preferred ones Xu et al. [2023] (by annotating or ranking). This can be done without explicit RL credit assignment by deriving a loss function from preferences (as done in DPO for language Rafailov et al. [2023] and adapted to diﬀusion as we will discuss).
+
+Reward Modeling: Often, the true objective we care about (human satisfaction) is hard to measure automatically. Reward modeling addresses this by training a reward model rφ(x, c) to approximate human judgments. For images, this might involve collecting a dataset of human com- parisons (which of two images is better for the prompt) and ﬁtting rφ so that rφ(x+, c) > rφ(x−, c) for preferred image x+ over x−. Once rφ is learned, it can provide a dense, diﬀerentiable re- ward signal for any generated image. This model can then guide the diﬀusion model alignment, either through RL (treating rφ as the reward function in the RL objective) or direct gradients if possible Clark et al. [2024]. For example, ImageReward is a reward model learned from human ratings of images given prompts Xu et al. [2023]. Such a model can score any candidate image. Using rφ as a proxy, one can ﬁne-tune the generator to increase rφ scores of its outputs Lee et al. [2023]. However, caution is needed: rφ is an imperfect proxy and optimizing too hard against it can cause the generator to exploit quirks of rφ (reward hacking). This phenomenon, also called reward overoptimization, is analogous to an agent exploiting a mis-speciﬁed reward function in RL, often at the expense of the intended outcome Yang et al. [2024a], Zhang et al. [2024a]. In summary, aligning diﬀusion models involves:
+
+• Deﬁning or learning a reward that captures alignment goals (human preference or safety).
+
+• Fine-tuning or guiding the diﬀusion model to optimize this reward, while avoiding degener- ation (maintaining diversity, preventing reward hacking, etc.).
+
+• Doing so eﬃciently (with as little human data as possible) and robustly (generalizing to new prompts, not just those seen during feedback collection).
+
+In the next section, we review the literature that has tackled these tasks, categorizing approaches by how they use reward models and reinforcement learning techniques.
+
+3 Literature Review of Alignment Methods for Diﬀusion Models
+
+A number of key “approaches” to align text-to-image diﬀusion models with human preferences have been proposed in the last two years. We structure this review along the lines of methodology:
+
+1. Reinforcement Learning with Human Feedback (RLHF) for Diﬀusion Models: Methods that explicitly apply RL algorithms (e.g. policy gradient, PPO) using a reward model or human feedback signal.
+
+3. Diﬀerentiable Reward Fine-Tuning: Techniques that assume a diﬀerentiable reward function (or make one via surrogate models) and directly backpropagate into the diﬀusion model, avoiding RL’s high variance.
+
+2. Direct Preference Optimization (DPO) and Variants: Methods that bypass training a reward model by directly using preference data (human choices) in the loss function, often yielding a simpler ﬁne-tuning procedure.
+
+4. Advanced Strategies to Mitigate Issues: Hybrid or improved methods addressing spe- ciﬁc challenges like reward overoptimization, sample ineﬃciency, or safety constraints (in- cluding e.g. reward diﬀerence modeling Deng et al. [2024a], Zhang et al. [2024b], region- speciﬁc tuning Xing et al. [2025b], etc.).
+
+5. Feedback Eﬃciency and AI Feedback: Methods focusing on reducing the reliance on hu- man feedback by either being more sample-eﬃcient or using AI-generated feedback Lee et al. [2024a] (RLAIF); in the context of diﬀusion models, instead of LLM feedback, it could be from visual language models Bordes et al. [2024]. However, this is a chicken-egg problem, the VLM may not be well trained to give appropriate reward.
+
+Table 1 at the end of this section provides a high-level comparison of representative methods across these categories. We now discuss each category with key examples from the literature.
+
+3.1 RLHF for Diﬀusion: Policy Gradient Approaches
+
+The direct application of reinforcement learning to diﬀusion model alignment typically involves the following pipeline: (1) gather human feedback on model outputs (e.g., ranking images by quality or alignment with prompt), (2) train a reward model on this data to predict a scalar reward, (3) ﬁne-tune the diﬀusion model with an RL algorithm to maximize this reward model’s output. This mirrors the approach used in NLP for aligning LMs Ouyang et al. [2022]. Aligning Text-to-Image Models using Human Feedback Lee et al. [2023] was one of the ﬁrst such attempts. In this work, the authors collected human feedback for a variety of prompts, focusing on image-text alignment issues (such as counting objects correctly). They trained a reward model rφ on these human labels. Then, instead of a full RL algorithm, they used a simpler “reward-weighted likelihood” ﬁne-tuning: essentially re-weighting the diﬀusion model’s training loss by exp(rφ). This can be seen as a form of RL where the gradient approximates an advantage-weighted update. Their results showed better prompt ﬁdelity (e.g., correctly coloring objects as instructed) after ﬁne-tuning Lee et al. [2023]. They also analyzed trade-oﬀs, noting that pushing alignment too far can reduce image diversity or quality. This work laid groundwork on design choices (how to incorporate the reward, how to balance it with the original loss, etc.) and showed that even a relatively straightforward RLHF method can signiﬁcantly improve alignment for speciﬁc attributes. DPOK (Fan et al., NeurIPS 2023) Fan et al. [2023] took a more rigorous RL approach. The authors deﬁne an online RL ﬁne-tuning procedure for diﬀusion models with a reward model. DPOK uses policy gradient with KL-regularization. In practice, this is analogous to the PPO algorithm used in language model RLHF, where the diﬀusion model (policy) is updated to increase reward but is penalized for deviating too much from the original model (to maintain image quality
+
+and diversity). The “K” in DPOK indicates the inclusion of a KL term. They also provide analysis on the role of this KL regularization in stability Fan et al. [2023]. Experiments showed DPOK outperformed supervised ﬁne-tuning baselines in both alignment (e.g., better prompt compliance) and quality metrics Fan et al. [2023]. DPOK can be seen as an evolution of the approach by Lee et al. Lee et al. [2023], introducing a more formal RL objective and constraints to mitigate unwanted drift. It still relies on a pretrained reward model to guide the optimization. A challenge in these RLHF approaches is the sparse reward: the model gets a single score after an image is fully generated. This is akin to a bandit setting (no intermediate feedback). As diﬀusion models typically sample many steps, RL gradients (REINFORCE) can have high variance. One strategy is to simulate “multiple tries” per prompt and use rejection sampling or reranking: generate several images and pick the one with highest reward Lee et al. [2023]. This improves outputs without changing the model (just using the reward model to select outputs), but it increases inference cost and doesn’t permanently ﬁx the model. The RL ﬁne-tuning addresses this by updating the model itself to more often produce high-reward images on the ﬁrst try. Several works have reported that naive RLHF (using e.g. REINFORCE directly on diﬀusion outputs) can be unstable or require many samples Gupta et al. [2025]. To tackle this, alternative RL formulations have been explored: Feedback-Eﬃcient Online RL (Uehara et al., ICML 2024): Instead of oﬄine feedback and static reward model, Uehara et al. consider an online setting where the model queries an oracle for the reward of generated samples and updates continuously Uehara et al. [2024a]. They frame it as a bandit problem on the space of generated data, with the goal of ﬁnding high-reward regions of the image distribution eﬃciently Uehara et al. [2024a]. They propose an RL algorithm that biases exploration toward feasible samples (since many random images might be nonsensical or out-of-distribution) Uehara et al. [2024a]. By focusing on the manifold of realistic images, the method improves the sample eﬃciency of ﬁnding better samples. The theoretical contribution is a regret bound showing the algorithm will converge to high-reward outputs with fewer queries Uehara et al. [2024a]. This is important for scalability: it suggests ways to ﬁne-tune models with far less human evaluation by being smart in how the search is done. While their examples included images (aesthetics) and even molecules, the method is general RL. One limitation is it assumes an oracle that can give a reward for any sample on the ﬂy (for molecules that might be a property calculator, for images it could be a human in the loop, which might not be feasible for huge numbers of queries). Handling Reward Hacking (Zhang et al., ICML 2024): When an RL agent (the diﬀusion model) starts exploiting the reward model, you get reward overoptimization (hacking). Zhang et al. analyze this in diﬀusion models and identify two biases Zhang et al. [2024a]: (1) a temporal inductive bias – diﬀusion models operate sequentially, and existing methods didn’t fully leverage the fact that earlier denoising steps set up structure that later steps reﬁne. Ignoring this can cause the model to overly focus on ﬁnal reward and potentially diverge in early steps. (2) primacy bias in the reward model’s neurons – they found that some neurons become saturated (“active”) in the critic, making the critic easier to game, whereas dormant neurons (never activated) ironically served as regularizers Zhang et al. [2024a]. Based on these, they proposed TDPO-R (Temporal Diﬀusion Policy Optimization with neuron Reset) to modify the RL algorithm Zhang et al. [2024a]. TDPO introduces a modiﬁed objective aligning with diﬀusion’s temporal nature (for instance, possibly applying the reward at intermediate steps or shaping the reward) and includes a mechanism to reset or penalize the critic’s over-active neurons during training Zhang et al. [2024a]. This eﬀectively changes the gradient the diﬀusion model sees, to discourage it from exploiting speciﬁc features the reward model might have latched onto. Empirically, TDPO-R achieved better actual improvements (e.g., better human ratings of outputs) for the same reward gain, indicating it succeeded in avoiding obvious reward hacking that baseline RL might fall into Zhang et al. [2024a]. In summary, RLHF applied to diﬀusion models has proven eﬀective but comes with challenges of stability and potential misalignment due to the proxy reward. Methods like DPOK and TDPO- R add regularization and inductive biases to the RL process to keep it stable and truly beneﬁcial. RLHF methods typically require a separate reward model trained on human feedback, which we will discuss more in the next subsection on reward modeling.
+
+3.2 Reward Modeling and Preference Data for Diﬀusion
+
+Before diving into direct preference optimization methods, it is worth reviewing the eﬀorts in creating reward models and datasets for image generation alignment
+
+• ImageReward (Xu et al., NeurIPS 2023): This work introduced a large-scale dataset of human comparisons for text-to-image outputs and trained a reward model on it Xu et al. [2023]. The authors collected 137k comparisons of images generated by various models given the same prompt, labeled by human raters for preference Xu et al. [2023]. The resulting ImageReward model predicts a score given an image and prompt. It was shown to correlate better with human preferences than prior automatic metrics Heusel et al. [2017], Li et al. [2022], Radford et al. [2021], Schuhmann et al. [2022]. ImageReward enabled researchers to have a ready-to-use rφ(x, c) for experiments, which likely accelerated RLHF research for dif- fusion models. Xu et al. in Xu et al. [2023] also proposed a simple ﬁne-tuning approach called ReFL (Reward Feedback Learning) to optimize a diﬀusion model against the ImageReward score Xu et al. [2023]. This method, similar in spirit to RLHF, demonstrated that tuning to maximize the learned reward improved human-rated quality of outputs in their tests.
+
+• Better Aligning T2I with Human Preference (Wu et al., ICCV 2023) Wu et al. [2023]: This paper took a somewhat diﬀerent angle, focusing on improving the evaluation of alignment and constructing a new benchmark called HPSv2 (Human Preference Score v2) Wu et al. [2023]. Wu et al. collected a dataset of user preferences (798,090 human preference choices on 433,760 pairs of images) and trained an evaluator model. They ﬁne- tuned diﬀusion models (particularly Stable Diﬀusion Rombach et al. [2022]) and observed that certain training schemes improved the alignment score without heavy RL. While they did not introduce a fundamentally new RL method, their contribution in data and metrics (like proposing PickScore, an automatic metric learned from the Pick-a-Pic dataset) provided tools for later works to measure success. This addresses the need for reliable evaluation: since running a human study for each new method is costly, having a stand-in metric like PickScore or ImageReward to at least approximate human judgments is useful.
+
+• Pick-a-Pic (Kirstain et al., NeurIPS 2023): Although primarily a dataset paper, Pick- a-Pic released an open dataset of user preference judgments for images Kirstain et al. [2023]. It contains tens of thousands of prompt-image pairs with binary feedback (which image is preferred). Such datasets are key for both training reward models and directly training diﬀusion models on preferences.
+
+These eﬀorts underline that reward modeling is a critical component of alignment. A good reward model enables alignment algorithms to progress without constant human intervention. However, training a robust reward model is itself challenging — it must generalize to outputs from a model after it is ﬁne-tuned (distribution shift) and not encode unintended biases. Some research has looked into the representation of reward models to be more general (for example, using CLIP- based features to represent images in reward models). Now, moving to Direct Preference Optimization (DPO): In the language domain, Rafailov et al. [2023] introduced an algorithm where instead of training a reward model, one directly ﬁne-tunes a policy such that πθ(output+) is higher than πθ(output−) for preferred vs. dispreferred outputs. Surprisingly, they showed this can be derived in a way that yields a simple cross-entropy style loss on the binary comparisons, avoiding reinforcement learning altogether. The key insight is treating the base model as a prior and deriving a Bayes-optimal update given pairwise feedback, resulting in a loss L ∝−log σ(β(fθ(x+) −fθ(x−))) where fθ = log πθ is the log-probability (up to a constant) and β is a temperature hyperparameter Rafailov et al. [2023]. For diﬀusion models, applying DPO is more complicated than for language because we need a notion of πθ(x|c) for images. Diﬀusion models deﬁne a distribution over the image (through the iterative process). In principle, one could treat the ﬁnal sample x0 probability under the model as πθ(x0|c), but calculating or diﬀerentiating that is intractable due to the latent variable of the diﬀusion chain. However, some works have adapted preference optimization ideas:
+
+Diﬀusion-DPO (Miao et al., 2023) Wallace et al. [2023]: Building upon Direct Prefer- ence Optimization (DPO), traditionally used in language models, the authors adapt this approach for diﬀusion models by incorporating a diﬀerentiable objective derived from the evidence lower bound. Utilizing the Pick-a-Pic dataset, which contains over 851,000 pairwise human preferences, they ﬁne-tuned the Stable Diﬀusion XL (SDXL)-1.0 model. The resulting model demonstrated signiﬁcant improvements in visual appeal and prompt alignment compared to both the base SDXL- 1.0 and its larger variant with an additional reﬁnement model. Additionally, the study explores a variant of Diﬀusion-DPO that employs AI-generated feedback, achieving performance levels com- parable to those trained with human preferences, suggesting a scalable approach to diﬀusion model alignment. The reported results in Diﬀusion-KTO Li et al. [2024a] (below) suggest that a straightforward adaptation of DPO to diﬀusion is possible but might not be optimal for heavily distilled models. D3PO (Yang et al., CVPR 2024) Yang et al. [2024b]: “Direct Preference for Denoising Diﬀusion Policy Optimization” explicitly tackled the challenge of doing preference-based ﬁne- tuning without a reward model. The authors point out memory issues when trying to incorporate preferences across the multi-step generation. D3PO introduces a multi-step objective to break down the preference signal into the diﬀusion timesteps Yang et al. [2024b]. Essentially, they treat each diﬀusion step as part of an expanded MDP (using segments [T, t], t < T, the denoised image at xt at t is made to generate until x0, and reward is observed to update model at t, this is repeated. This also means that due to MDP formulation, only current xi and future xi−1 are required, thereby, leading to savings in memory.) so that the preference (which is an outcome-level signal) can be integrated. D3PO managed to ﬁne-tune a model using only human comparisons, achieving similar eﬀect to RLHF, but saving the eﬀort of reward model training. A notable advantage of not having a reward model is the avoidance of reward model mis-speciﬁcation. However, one trade-oﬀis that all preference data must be available for direct use in ﬁne-tuning (whereas a reward model could generalize to new prompts or be reused for multiple iterations of ﬁne-tuning). The results of D3PO were competitive and it was particularly touted for reducing memory requirements versus naive RL Yang et al. [2024b]. Aligning Diﬀusion with Human Utility (Li et al., NeurIPS 2024) Li et al. [2024a]: The Diﬀusion-KTO approach can be seen as another form of preference optimization. Instead of pairwise comparisons, they assume binary per-image feedback (like a user like/dislike). They then formulate the ﬁne-tuning objective as maximizing expected utility, which given binary feedback es- sentially means making the probability of a “good” (liked) image as high as possible. Interestingly, this approach does not need a reward model or even comparisons; it uses a large volume of weak feedback (like a thumbs-up) which can be obtained from implicit user behavior or ratings Li et al. [2024a]. The authors showed that using such signals, their method outperformed both supervised ﬁne-tuning and an implementation of Diﬀusion-DPO Li et al. [2024a]. This is encouraging because it implies we can tap into readily available data (for instance, users may naturally rate content, or we might use existing curated datasets of good vs. bad images) without curated preference comparisons. Essentially, Diﬀusion-KTO is optimizing θ to maximize Pθ(“user likes image”|c) across the training distribution of prompts and user feedback. They achieved this via a loss that resembles logistic regression on the binary feedback, treating the diﬀusion model as producing a score for each image. The details involve sampling from the model and updating it in a way that images that got a “like” are more probable under the model. In summary, DPO and related preference-based methods aim to simplify the pipeline by remov- ing the reward model middleman. They often result in more stable training (since cross-entropy losses are well-behaved) and are computationally cheaper (no iterative RL rollouts needed). How- ever, they typically require the feedback data in a particular format (e.g., direct ranking of outputs from the current model distribution). If the model changes signiﬁcantly dur- ing training, the ﬁxed dataset of comparisons might become less relevant (this is also a concern in RLHF if the reward model isn’t updated). Some approaches mitigate this by iteratively collecting preferences (self-play or online gathering, though for images that still means human in the loop). Direct preference methods also underscore an important concept: the diﬀusion model itself
+
+can serve as its own reward model to some extent. For example, DPO in language pointed out the connection between model logits and reward. In diﬀusion, some works (like Zhu et al. [2025]) draw connections between maximizing reward and adjusting the model’s score function directly. This leads naturally into the next category.
+
+3.3 Diﬀerentiable Reward Fine-Tuning (Backpropagation-Based)
+
+One way to avoid the complexity of RL is if the reward function is diﬀerentiable with respect to the image, and ideally, if we can diﬀerentiate through the generation process. In other words, instead of treating the diﬀusion model as a black-box policy to be nudged via RL, treat the whole sampling as a computation graph and do gradient ascent on reward. This was made possible by two contemporaneous works
+
+• DRaFT: Direct Reward Fine-Tuning (Clark et al., ICLR 2024) Clark et al. [2024] – The authors showed that one can indeed backpropagate through the entire diﬀusion sam- pling (from noise xT to image x0) to get the gradient of a reward R(x0) with respect to the model parameters. This was surprising because the diﬀusion process is T steps of stochastic sampling; however, they treated it similar to how one might diﬀerentiate through an ODE or through the reparameterization of the Gaussian noise (For instance, if x0 follows a normal distribution parameterized by θ, we can express x0 as: x0 = µθ + σθ · ǫ, where ǫ ∼N(0, I), see reparametrization trick Kingma and Welling [2019]). They also introduced two approxi- mations: truncating backpropagation to the last K steps (DRaFT-K), and a lower-variance estimator for the single-step case (DRaFT-LV). These approximations keep memory and computation manageable. Their experiments on stable diﬀusion ﬁne-tuning for various re- wards (CLIP score, aesthetic score, etc.) showed that DRaFT achieved higher reward faster than RL-based methods, conﬁrming the intuition that avoiding high-variance RL gradients helps. Another insight was that they connected several algorithms under one view: e.g., they pointed out that certain earlier methods are special cases of gradient-based ﬁne-tuning with particular approximations or regularizations. This gave a unifying perspective of how RL, classiﬁer guidance, and other techniques relate mathematically.
+
+• AlignProp (Prabhudesai et al., 2023)Prabhudesai et al. [2024] – Similarly, AlignProp proposed end-to-end backpropagation of the reward gradient through the diﬀusion model. The focus in AlignProp was on the engineering: storing all gradients is memory-heavy, so they ﬁne-tuned only small adapter modules (low-rank adapter layers inserted in the model) and used gradient checkpointing to drop intermediate results and recompute as needed. This way, they ﬁt the gradient computation in memory. AlignProp was tested on multiple reward objectives including semantic alignment (a learned image-text alignment score), aesthetics, and even controllability (like number of objects in the image). Because it can optimize any diﬀerentiable reward, they even combined rewards (multi-objective) by just summing them in the loss. The results showed that for diﬀerentiable rewards (like one given by a neural network), AlignProp vastly improved sample eﬃciency. Qualitatively, if the reward was “contain exactly 2 objects”, AlignProp could adjust the model to reliably output images with exactly two instances of the subject, which is a ﬁne-grained control that might be hard to get from naive diﬀusion models.
+
+The core idea in both is treating the diﬀusion model’s sampling as diﬀerentiable. In practice, we have to deal with the stochastic sampling (which is why gradient checkpointing or reparam- eterization is needed). These methods essentially do gradient descent on −Ex0∼pθ[R(x0)] with respect to θ, by swapping expectation and gradient under assumptions or approximations. One limitation is that the reward must be (or be made) diﬀerentiable. A human preference is not directly diﬀerentiable, but a neural network proxy like ImageReward or CLIP score is. So these methods still often rely on a learned reward model. The diﬀerence is that they avoid the RL step and directly update the generator according to the reward model’s gradient.
+
+Another subtle point: directly optimizing a reward model can be dangerous if the reward model is not perfect. This is exactly the reward hacking scenario. AlignProp Prabhudesai et al. [2024] and DRaFT Clark et al. [2024] can overﬁt to the reward model if run too long. Regularization like the KL penalty (keeping model close to original) or early stopping is used to mitigate this Wallace et al. [2023], Liu et al. [2024a]. In RL terms, one would call this avoiding moving too far in policy space. Interestingly, Reward Surrogate Optimization has been explored to allow diﬀerentiable training for non-diﬀerentiable rewards. A prime example: LaSRO (Jia et al., CVPR 2025) Jia et al. [2025] which stands for Latent Space Reward Optimization. They targeted the case of two-step diﬀusion models (like SDXL which has a base model and a reﬁner, or any highly distilled model which might generate in 1 or 2 steps). Traditional RL struggled here due to the extremely non-Markovian nature of two large steps Smith et al. [2024]. LaSRO’s idea is to learn a diﬀerentiable surrogate reward in the latent space of the diﬀusion model Lee et al. [2024b]. For example, suppose the real reward is something like “user prefers image A to B”. They train a surrogate reward function ˜R(z) where z is the latent (compressed) representation of an image, such that ˜R(z) approximates the user preference. Notably, they leverage a pre-trained latent diﬀusion model as part of this surrogate so that the latent z is a good representation of the image content Zhang et al. [2024c]. Because this surrogate is diﬀerentiable with respect to z, and z is related to the image generation (the small number of steps produce z then image), they can backpropagate through ˜R and the generation process. Eﬀectively, they turned a possibly non-diﬀerentiable reward (like human picks one image) into a learned diﬀerentiable reward in a lower-dimensional space. With this, they ﬁne-tuned a 2-step diﬀusion and showed it outperformed RL (they compare to their implementations of DDPO and Diﬀusion-DPO) in achieving better preference alignment Jia et al. [2025]. They also highlight stability: RL methods sometimes failed completely in the 2-step case (perhaps collapsing the model), whereas their method was stable Jia et al. [2025]. Diﬀerentiable ﬁne-tuning methods have a clear advantage in speed and often ﬁnal performance, as they utilize gradient information more directly. The disadvantage is the reliance on the reward model quality and diﬀerentiability. In cases where the reward is truly a black box (like human says yes/no with no model), RL is still the fallback. But one can often ﬁt a neural net to mimic the human – then use these methods.
+
+While most of the above works optimize for generic “preferences” or “aesthetics,” some focus speciﬁcally on safety alignment. Safety can be framed as just another reward to optimize (e.g., a reward model that detects unsafe content and gives low score), but it has some unique aspects:
+
+3.4 Safety-Speciﬁc and Region-Speciﬁc Alignment Techniques
+
+• There are hard constraints (certain content must never appear) which are not just a matter of degree.
+
+• Mitigations should ideally not drastically alter images otherwise considered good.
+
+• The space of “unsafe prompts” or cases can be diﬀerent from normal usage distribution.
+
+One interesting method is SafetyDPO (2024) Liu et al. [2024b] – The paper suggests adapt- ing the DPO method to speciﬁcally address safety alignment in a scalable way. It involves col- lecting pairwise data where one image is safer than another and directly optimizing that. Using the CoProV2 dataset, they train specialized components termed “safety experts” in the form of Low-Rank Adaptation (LoRA) matrices. These experts are designed to guide the model’s gener- ation process away from speciﬁc harmful concepts. SafetyDPO adopts a similar loss as DPO but on data labeled for safety compliance. A novel approach to minimize negative side-eﬀects is Focus-N-Fix (Xing et al., CVPR 2025) Xing et al. [2025b]. Instead of applying a global ﬁne-tune for safety or quality, Focus-N-Fix identiﬁes problematic regions in generated images (the ones that cause low reward or safety issues)
+
+and only ﬁne-tunes the model to change those regions. The idea stems from an observation: if you ﬁne-tune a model on one aspect, e.g. making it remove violent content, you might inadvertently change other aspects like prompt ﬁdelity or style. Focus-N-Fix is a region-aware algorithm that, during ﬁne-tuning, uses an attention mask to restrict updates to portions of the image that were determined to be bad. For example, if an output image had an over-sexualized region (detected by a NSFW detector highlighting that region), Focus-N-Fix will adjust how the model generates that region (perhaps making clothing appear or toning it down) without altering the rest of the composition. They achieve this by augmenting the diﬀusion process with region information — essentially, guiding the model to treat certain pixels diﬀerently if they were previously ﬂagged. Their experiments showed improvements in localized metrics (like reducing only the unsafe part while keeping background and other details consistent). This approach is particularly promising for safety because it targets the problem directly and minimally: it “ﬁxes” images rather than altering the model’s entire distribution. Over the course of training on many such cases, the model learns generally to avoid those problematic patterns from the start. The results indicated little to no degradation in other quality metrics, which is a big win. Another technique touching safety is using self-critique models or AI feedback. While not explicitly covered above, some works (like RLAIF: RL with AI Feedback) train reward models not from human data but from another AI system, which might include a safety classiﬁer or an LLM that provides feedback on an image’s content. This is tangential to our main discussion but worth noting as a possible way to get massive feedback without humans, albeit with the risk that the AI feedback inherits biases or errors. In this case, we may rely on some powerful foundational visual language models.
+
+3.5 Summary of Methods and Comparative View
+
+Having reviewed categories of methods, we now summarize and compare key dimensions in Table 1. The dimensions chosen are:
+
+• Method and Reference: identifying the approach.
+
+• Alignment Objective: what type of reward or preference it optimizes (e.g., human pref- erence via reward model, aesthetic score, binary feedback, etc.).
+
+• Feedback Modality: human comparisons, human ratings, AI-generated rewards, etc.
+
+• Technique: RL (and which algorithm) vs. direct optimization vs. other.
+
+• Safety Considerations: whether the method explicitly addresses safety and how (e.g., through a safety-speciﬁc reward or by design).
+
+• Eﬃciency/Scalability: notes on whether the method is sample-eﬃcient or requires large feedback datasets, and how it scales to high-resolution or many prompts.
+
+From the above comparison, a few trends can be observed: There is a clear trade-oﬀbetween methods requiring extensive human data (e.g., RLHF with large custom datasets) and those leveraging more readily available or simulated signals (binary feedback, AI rewards). Approaches like Diﬀusion-KTO Li et al. [2024a] and PRDP Deng et al. [2024b] strive to be scalable to web-scale feedback or prompt sets. Early RLHF methods established eﬀectiveness but newer methods like AlignProp and DRaFT tend to dominate in terms of eﬃciency, often achieving equal or better alignment in less time Clark et al. [2024], Prabhudesai et al. [2024]. Ensuring safety often requires special handling; a generic “improve preference” method might not inherently prevent all bad outputs unless the reward model was trained to include that in its scoring. Thus, approaches like Focus-N-Fix or SafetyDPO emerged to guarantee safety improve- ments without sacriﬁcing alignment on other axes Xing et al. [2025b], Liu et al. [2024b]. Many methods are complementary. For instance, one could use ImageReward as the reward model in an AlignProp or DRaFT run. Or one could use PRDP’s stable objective to pretrain a
+
+Method (Year) Alignment Objec- tive Technique Feedback Type Eﬃciency/Scale Safety Features
+
+Lee et al. 2023 Lee et al. [2023]
+
+Prompt-image align- ment (accuracy on attributes)
+
+Table 1: Comparison of Alignment Methods for Diﬀusion Models
+
+Reward-weighted likelihood (implicit RL)
+
+Human-labeled com- parisons (custom dataset)
+
+Medium (requires new hu- man data, moderate size) No explicit safety, gen- eral alignment focus
+
+DPOK (2023) Fan et al. [2023]
+
+Not specifically, aims not to degrade any as- pect ImageReward + ReFL (2023) Xu et al. [2023]
+
+Human preference reward (image-text match, quality)
+
+Aesthetic and sim- ilarity preferences (general-purpose)
+
+Online RL (policy grad + KL) Human feedback via reward model Low (needs many sam- ples, but KL improves stability)
+
+Reward model + di- rect fine-tune (some RL-like steps)
+
+Large human comp dataset (137k comps)
+
+High (pre-trained reward, one can reuse it; fine-tune efficient)
+
+Indirect (if safety in- cluded in pref, other- wise no)
+
+AlignProp (2023) Prabhudesai et al. [2024]
+
+DRaFT (2024) Clark et al. [2024]
+
+Differentiable re- wards (CLIP, aes- thetic, etc.)
+
+Differentiable rewards (often learned)
+
+Backprop through diffusion (low-rank adapters)
+
+Backprop (full or truncated) Same as above High (less memory with truncation, fast) If a safety reward model used, yes; method itself agnostic
+
+Any differentiable feedback (often learned models)
+
+High (very fast con- vergence, needs reward model)
+
+Can include safety clas- sifier gradient as reward
+
+PRDP (2024) Deng et al. [2024a]
+
+Possibly addressed indi- rectly by stability (no specific safety metric) TDPO- R (2024) Zhang et al. [2024a]
+
+Learned reward model (black-box) Reward Difference Regression + RL (proximal updates)
+
+Human reward model Policy gradient (PPO-like) with temporal
+
+Human pref via re- ward model High (stable on 100K+ prompts, scalable to large data)
+
+Human reward model Medium (focused on avoiding pitfalls, not on reducing data)
+
+Yes, mitigates reward hacking which includes extreme outputs
+
+Feedback- Efficient RL (2024) Uehara et al. [2024a]
+
+D3PO (2024) Yang et al. [2024b]
+
+Task-specific ground-truth re- ward (e.g. aesthetic or molecule prop- erty)
+
+Human preferences (pairwise) Direct preference optimization (multi- step)
+
+Online RL explo- ration (theory- backed)
+
+Oracle feedback (hu- man or simulator) High (fewer queries for high reward) Could be used for safety by treating safe output as reward
+
+Human comparisons (no reward model) Medium (needs pref- erences for current model outputs, alleviates memory issues of naive approach)
+
+Not specifically ad- dressed
+
+Dense Reward View (2024) Yang et al. [2024a]
+
+Diffusion- KTO (2024) Li et al. [2024b]
+
+Human preferences DPO-style with tem- poral discount Human comparisons (like DPO, but with time-aware loss)
+
+Binary per-image feedback (likes) Utility maximization (logistic objective) Implicit human feed- back (e.g., from user behavior)
+
+Medium (similar to DPO, slightly more overhead) Not specifically, but helps general alignment
+
+High (uses abundant weak feedback, no custom la- beling needed)
+
+Can integrate safety by using “like” for safe outputs only
+
+PSO (2025) Miao et al. [2025]
+
+LaSRO (2025) Jia et al. [2025]
+
+Focuses on preserv- ing quality in ultra-fast models (no direct safety metric) Focus-N- Fix (2025) Xing et al. [2025a]
+
+Human preferences (or style, etc.) Pairwise Sam- ple Optimization (likelihood margin increase)
+
+Arbitrary rewards (including non-diff) for 2-step model
+
+Learned latent re- ward (differentiable) + gradient
+
+Either offline pair- wise data or online generated pairs
+
+Human or other (converted to latent surrogate)
+
+High (works directly on distilled models, flexible) Not explicitly, but ap- plicable if preferences involve safety
+
+Medium-High (solves pre- viously unsolvable 2-step case, requires surrogate training)
+
+Yes, explicitly targets safety issues (over- sexualization, violence) region-wise SafetyDPO (2024) Safety compliance preferences DPO on safety- labeled pairs Human or curated safety comparisons Medium (similar to DPO) Yes, entire objective is safety alignment
+
+Localized quality (safety, artifacts) Region-based fine- tuning (mask prob- lematic)
+
+Human or automated region annotations (e.g. detector high- lights)
+
+High (does not need huge data, each finetune tar- geted, can generalize)
+
+model then ﬁne-tune further with Focus-N-Fix for safety details. The ﬁeld is converging towards combining ideas to cover weaknesses: e.g., use diﬀerentiable methods for speed, but add RL-style constraints to avoid overoptimization, incorporate region-based or step-based tweaks to handle speciﬁc failure modes. Having thoroughly reviewed the literature, the next section will highlight connections between these works and how they build on each other.
+
+4 Inter-Paper Relationships and Methodological Progress
+
+The rapid development of alignment techniques for diﬀusion models has been highly interrelated. We now outline some key relationships and evolutionary trends.
+
+4.1 From RLHF to Direct Optimization
+
+The progression from Lee et al. [2023] and Fan et al. [2023] (RL with human feedback) to Prabhudesai et al. [2024] and Clark et al. [2024] (direct backpropagation) illustrates a shift in strategy. Early suc- cesses in RLHF conﬁrmed that human feedback can signiﬁcantly improve outputs Lee et al. [2023], but also revealed issues like instability. AlignProp and DRaFT can be seen as responses to those issues: 1. They directly address the high variance of RL gradients by computing exact or nearly exact gradients Fan et al. [2023]. 2. They leverage the availability of reward models (like Im- ageReward Xu et al. [2023]) that earlier RLHF papers produced, but then optimize against them more eﬃciently. In essence, once a reward model such as Xu et al. [2023] was available, the bottleneck became how to use it eﬀectively. AlignProp cites that vanilla RL (REINFORCE) was sample-ineﬃcient and slow, motivating their approach Prabhudesai et al. [2024]. DRaFT similarly shows signiﬁcant speedup over an RL baseline for the same reward Clark et al. [2024]. Thus, one line of progress is: get a good reward model (via RLHF or data), then replace RLHF with gradient-based ﬁne-tuning for eﬃciency.
+
+4.2 Incorporating Inductive Biases of Diﬀusion
+
+Several papers have speciﬁcally built on the idea that diﬀusion models are not generic policies; they have structure (multiple steps, a speciﬁc forward/backward process). For example, the Dense Re- ward View (Yang et al.) Yang et al. [2024a] and TDPO (Zhang et al.) Zhang et al. [2024d] both highlight the temporal aspect: - Yang et al. took inspiration from DPO but realized a dif- fusion model’s multi-step nature violates the i.i.d assumption behind the original DPO derivation Yang et al. [2024a]. By adding temporal discount factors to DPO’s loss, they essentially prior- itized early denoising steps in the alignment, which aligns with the idea that initial steps encode coarse composition and later steps add detail Yang et al. [2024a]. This was par- tially motivated by Zhang et al.’s Zhang et al. [2024d] observation that ignoring temporal bias can cause reward overoptimization. The method TDPO (Temporal DPO) explicitly uses the temporal inductive bias to modify training Yang et al. [2024a], and the same group discovered the primacy bias issue. The concept of resetting critic neurons is novel in diﬀusion alignment and builds on prior RLHF experiences in language where reward models can be over-optimized. It shows cross- pollination: ideas from analyzing language RLHF (like avoiding reward hacking) are adapted to images, but with a twist for diﬀusion’s stepwise process. Focus-N-Fix’s region-based idea is another inductive bias: images have spatial structure, and misalignment might be spatially localized Xing et al. [2025b]. Instead of treating the image as just an output vector, they use computer vision tools to identify regions and only adjust those. This is reminiscent of classic computer vision approaches where one would segment or localize problematic content; Focus-N-Fix eﬀectively brings that into the model training loop. For localizing, current foundation models like SAM Kirillov et al. [2023] can be very useful.
+
+4.3 Shared Use of Data and Models
+
+Many of these works rely on common datasets or models, showing how one paper’s contribution enables others: The Human Preference Dataset (HPS) Wu et al. [2023] and Pick-a-Pic Kirstain et al. [2023] appear in multiple works. PRDP used “Human Preference Dataset v2” and Pick-a-Pic in large-scale training Deng et al. [2024b]. This suggests that data collected by one group (OpenAI or LAION perhaps) was made available and then used by others to evaluate new algorithms at scale. ImageReward model is cited widely as a baseline or component. AlignProp’s demo compar- isons use HPS v2 Wu et al. [2023] and ImageReward Xu et al. [2023] as benchmarks. Diﬀusion- KTO Li et al. [2024a] uses ImageReward and PickScore as automatic evaluation metrics to claim better performance. This indicates a convergence on certain standard reward models (ImageRe- ward, PickScore) for evaluation, similar to how language models often use HELM Liao et al. [2025] or other curated metrics to compare alignment. Because of these shared references, the community can iteratively improve: for instance, if PRDP shows RL can work at 100K scale and yields certain output quality Deng et al. [2024b], then a method like DRaFT can attempt the same scale and demonstrate improvement. Indeed, DRaFT’s results note outperforming RL-based approaches on a variety of rewards Clark et al. [2024] referencing methods like DPOK or others as a comparison.
+
+4.4 Complementary Nature of Approaches
+
+While at ﬁrst glance some methods compete (e.g., RL vs direct optimization), they can be com- bined.
+
+• Two-Stage Training: One could use a direct optimization method to quickly reach a certain alignment, then ﬁne-tune further with RL on truly non-diﬀerentiable nuances or to incorporate fresh human feedback on the new model’s outputs (closing the human-in-the- loop).
+
+• Regularization Mix: It’s plausible to include a KL penalty (from RLHF) inside a gradient- based method (like a term in AlignProp’s loss to keep it close to the original model). Con- versely, RL methods like DPOK already included that KL term as a core design. So there’s a convergence where all methods recognize not to stray too far from the original distribution (to prevent quality collapse).
+
+• Safety + Preference: Focus-N-Fix could be used after any of the other alignment pro- cesses. Suppose one ﬁne-tunes a model with AlignProp to maximize aesthetic and prompt alignment; it might inadvertently increase some unsafe tendencies (maybe making images more vivid could increase gore if prompted, etc.). Running Focus-N-Fix with a safety reward on the resulting model could catch those and ﬁx them locally. Since Focus-N-Fix claims to not hurt other aspects Xing et al. [2025b], it’s a good ﬁnal “polishing” step. Indeed, the authors mention improvements in safety “with little or no degradation to others” Xing et al. [2025b], implying it can layer on top of an already aligned model to speciﬁcally handle safety.
+
+4.5 Incremental Improvements
+
+Some works explicitly build atop previous ones. PRDP (CVPR 2024) Deng et al. [2024a] came after DPOK (NeurIPS 2023) Fan et al. [2023] and addressed its scalability issues, eﬀectively saying: we take the idea of RL ﬁne-tuning and make it stable for much bigger data by changing the objective to reward diﬀerence prediction Deng et al. [2024b] This clearly is incremental: DPOK solved RLHF for diﬀusion; PRDP solved RLHF at scale for diﬀusion. Diﬀusion-KTO (NeurIPS 2024) Li et al. [2024a] likely was developed alongside or just after those, introducing a fresh angle (binary feedback) potentially inﬂuenced by the realization that
+
+pairwise labeling is expensive. Possibly the authors noticed the traction of DPO and decided to see if simpler feedback could work; their success broadens the horizon of what data can be used. The Tutorial by Uehara et al. 2024 Uehara et al. [2024b] consolidates a lot of these develop- ments and oﬀers a broader perspective connecting them to concepts like GFlowNets and control theory Uehara et al. [2024b]. This indicates the ﬁeld reaching a maturation point where disparate methods are put into a common framework (for example, they relate reward-weighted MLE (like Lee et al.) to RL and to other algorithms, and discuss connections to things like path consis- tency learning Nachum et al. [2017] which is a concept from RL and control). That tutorial also speciﬁcally mentions how classiﬁer-guidance (an old diﬀusion technique where you guide samples with a classiﬁer’s gradient) is related to these new methods as just another way of injecting pref- erences Uehara et al. [2024b]. Essentially, alignment methods can be viewed as “learning to do classiﬁer-guidance internally with a learned classiﬁer (reward model)”.
+
+4.6 Competitive Benchmarks
+
+As these methods matured, they often compare against each other - AlignProp cites Miao et al. [2025] (PSO) as the previous state-of-art using RL (REINFORCE) and shows a 25× speedup. - Diﬀusion-KTO compares to “Diﬀusion-DPO” and shows improvement in human judgment and ImageReward scores Yang et al. [2024b]. - PRDP compares against “well-established RL-based methods in small scale” and then shows those fail in large scale where PRDP succeeds Deng et al. [2024b]. - Many papers use baseline models like Stable Diﬀusion v1.4 or v1.5, and evaluate on common test prompts (some use LAION Aesthetics dataset, etc.). This consistency allows the incremental improvements to be measurable. In conclusion, the papers form a web of progress: initial attempts adapted the known RLHF idea to images (with some success but limitations), then others improved the eﬃciency (AlignProp, DRaFT), stability (PRDP, TDPO), and speciﬁcity (Focus-N-Fix, SafetyDPO) of those methods. Data and evaluation tools produced by one were reused by others. The community is moving towards more sample-eﬃcient and safe alignment techniques, with overlapping ideas reinforcing the validity of certain approaches (for example, multiple groups found direct gradient methods eﬀective, which validates that direction). The literature review and analysis inform the future work: despite all the progress, open problems remain. The next section proposes ﬁve such problems and research directions to address them.
+
+5 Open Problems and Research Directions
+
+Drawing from the survey above, we identify several open challenges for alignment and safety in diﬀusion models. Here we propose ﬁve research problems that we plan to investigate over the next two years. Each problem is described with its signiﬁcance, key challenges, related work context, and a potential plan for tackling it. How can we simultaneously align diﬀusion models to multiple human preferences (e.g., semantic accuracy, aesthetic quality, and safety) without sacriﬁcing one objective for another? Most existing works optimize a single reward at a time or sum diﬀerent aspects into one score, which can lead to trade-oﬀs where improving one aspect (like safety) might degrade another (like prompt ﬁdelity) Clark et al. [2024], Prabhudesai et al. [2024]. We need methods for multi-objective alignment that ensure a model meets several criteria all at once.
+
+• Reward Balancing: Diﬀerent objectives (say, matching prompt vs. avoiding oﬀensive content) have rewards on diﬀerent scales and frequencies. A naive weighted sum of rewards
+
+might still allow the model to game one at expense of others (e.g., achieving high aesthetic score by introducing minor prompt errors).
+
+• Catastrophic Forgetting: Fine-tuning on one objective and then on another can make the model forget the ﬁrst. If we do sequential alignment (ﬁrst aesthetic, then safety), the ﬁrst goal might regress. Joint training is needed, which is tricky if objectives conﬂict.
+
+• Evaluation: How to measure success on multiple axes? We would need a combined metric or a way to visualize the Pareto frontier of solutions (where improving one more would hurt another).
+
+• Human Preference Trade-oﬀs: Ultimately, human users might accept slight losses in one area for gains in another (e.g., a tiny drop in image sharpness is ﬁne if safety is ensured). Capturing these trade-oﬀs either in a reward model or in the training procedure is hard.
+
+Related Work: Many works have touched on trade-oﬀs: The paper Lee et al. [2023] explicitly examined alignment vs ﬁdelity trade-oﬀs, noting careful hyperparameter choices were needed. The paper Xing et al. [2025a] addressed it by localizing changes to avoid global degradation. The paper Prabhudesai et al. [2024] and Clark et al. [2024] showed one can combine diﬀerentiable rewards simply by adding them (they mention optimizing multiple objectives together) Prabhudesai et al. [2024], but this assumes a linear combination is adequate. In RL literature, methods like scalarization or Pareto optimal policy search exist for multi- objective RL, but haven’t been applied in diﬀusion context. Some approaches use conditional training: e.g., train a model to trade-oﬀvia a conditioning variable that a user can set (like a dial between safety and freedom). Classiﬁer-free guidance in diﬀusion gives a user adjustable trade-oﬀ between ﬁdelity and adherence to prompt via a guidance scale; analogous ideas could let a user adjust say “strictness of safety” vs “image variety”. Can we minimize the amount of human feedback required to align a diﬀusion model by employing active learning or synthetic feedback generation? The cost of obtaining human preference data is one of the biggest bottlenecks for RLHF in images. Current methods often assume a static dataset of comparisons or ratings, but perhaps only a fraction of those are most informative for improving the model. The goal is to develop a system that queries humans intelligently and possibly uses an AI assistant to ﬁlter or predict feedback for less critical cases.
+
+• Uncertainty Quantiﬁcation: The model needs to know when it is uncertain about what humans would prefer. Diﬀusion models don’t naturally provide uncertainty over preference; we might use the reward model’s uncertainty (e.g., how close to 0.5 a preference prediction is).
+
+• Out-of-Distribution Prompts: An active learning strategy might focus on certain prompts/images, but if those aren’t representative, the model may overﬁt to them. We need to ensure broad coverage.
+
+• Human-in-the-Loop Constraints: People cannot be on call to answer queries in real time for training. So active learning might need to be batched: propose a set of queries, get answers, update model, repeat. The design of queries (pairwise comparisons vs rating vs yes/no on one image) aﬀects human eﬀort per query.
+
+• Synthetic or AI Feedback Risks: If we let an AI (like CLIP or an LLM judging images) provide feedback to reduce human load, we risk aligning to AI biases rather than human intent (the “simulation” might be ﬂawed).
+
+Related Work: The Feedback Eﬃcient RL paper by Uehara et al. Uehara et al. [2024a] directly addresses eﬃciency but on the algorithmic side. It ensures each query is used eﬀectively by exploring on the “manifold of feasible images” Uehara et al. [2024a]. We can build on their bandit algorithm, adding an active query selection: only query the oracle for uncertain cases. Active learning is well-studied in supervised learning. There’s literature on active learning for preference learning (for e.g., deciding which pair of items to ask a user to compare to best learn their utility function). RLAIF (reinforcement learning with AI feedback) in language (like using GPT-4 to critique model outputs instead of humans) has shown promising results, albeit needing careful calibration. Oﬀ-policy feedback utilization: Some works (like Li et al. [2024b]) exploit existing signals (e.g., user “likes” from platforms) instead of actively querying, which is a form of using passive feedback. We might incorporate such signals as a starting point, then actively query only on areas where those signals are absent or ambiguous. How can we ensure a diﬀusion model remains safely aligned even when faced with adversarial or out-of-distribution prompts that try to circumvent its safety measures? Many models can be tricked into producing disallowed content with carefully phrased prompts (e.g., role-play scenar- ios, obfuscated language). Unlike classiﬁcation tasks, where adversarial examples are pixel-level perturbations, here the adversary is a user choosing a clever prompt. The challenge is to build a robust safety mechanism into the model that is hard to bypass.
+
+• Deﬁning Adversarial Prompts: The space of “attacks” (prompt incantations to get bad content) is huge and creative. We need to anticipate or generate representative samples of such prompts.
+
+• Balancing Content Filtering vs. Generation: The model should not become overly sensitive and refuse normal requests (false positives), but also not be easily tricked (false negatives of the ﬁlter).
+
+• Integration of Filtering Mechanisms: There are external approaches, e.g., run a prompt through a separate ﬁlter or run the output through a safety classiﬁer. But integrating this into the model’s alignment (possibly via RL or ﬁne-tuning) is non-trivial.
+
+• Testing Robustness: We need a systematic way to evaluate safety beyond the usual prompt lists. Possibly using red-teaming, where we or a hired group tries to ﬁnd exploits.
+
+Related Work: Xing et al. [2025a] improved safety by focusing on problematic regions in out- puts, but it doesn’t explicitly discuss prompt attacks. It ﬁxes content in images after generation for known unsafe outputs, which is slightly diﬀerent. Safety ﬁlters (like OpenAI’s classiﬁers or keyword-based prompt ﬁlters) exist outside the model. Some open-source eﬀorts (Stable Diﬀusion’s safety ﬁlter) simply block certain words. These are easy to bypass (just change a letter). Adversarial prompt generation could be approached with language models themselves: e.g., use an LLM to generate prompts that likely yield NSFW images. There is research on adversarial attacks on multimodal models which we can leverage. In RL terms, one could set up an adversarial game: one agent tries to ﬁnd a prompt that causes a safety violation, the other (the diﬀusion model policy) updates to avoid it. This is reminiscent of generative adversarial networks or adversarial training in classiﬁcation. There’s related work in language models: training them on “adversarial instruction” data, e.g., adding special instructions that try to trick the model and ﬁne-tuning the model not to be tricked. Techniques from that realm (like making the model respond with refusals under certain trigger conditions) could inform image cases.
+
+We will evaluate robustness by organizing a red-team evaluation: either with colleagues or via crowd-platform, have people try to ﬁnd a prompt that makes the model produce something against policy. The number of successful attacks (and their nature) will be recorded. We will compare our adversarially trained model to a baseline model (maybe just normal RLHF model) to see if it indeed reduced the rate of unsafe failures. One interesting research question here is how to incorporate the safety reward without wrecking the model’s creativity. We might experiment with diﬀerent weighting schedules — for example, gradually increase the weight of adversarial prompts in training, so the model has time to adjust. Also, ensure that normal content generation doesn’t become overly conservative (we can monitor metrics like diversity or maybe see if it starts refusing even safe prompts). The expected outcome is a model that holds up much better against malicious prompting. This could be an important contribution as generative models become widely deployed; we need to anticipate misuse. If the approach is successful, it essentially yields a methodology to “vaccinate” generative models against certain attacks, by learning from attempted attacks. Can a diﬀusion model be continually reﬁned with new feedback and evolving preferences without retraining from scratch and without performance degradation on old preferences? In a deployed setting, user preferences or societal norms may shift, and new types of content (or new edge cases) will emerge. We want an always-updating aligned model that can learn from new data on the ﬂy (or in periodic updates) similar to how an online service would.
+
+• Avoiding Forgetting: As with any continual learning, there is risk the model forgets how to do tasks it was previously good at when learning a new one (or aligning to a new rule).
+
+• Eﬃciency of Updates: We can’t aﬀord to ﬁne-tune the entire huge model for every small update—need to make local adjustments possibly (like updating a small component).
+
+• Feedback Incorporation: Possibly the model is deployed and gets implicit feedback (like user edits, re-rolls of output, or explicit ratings). How to incorporate that in training signals safely? It could be noisy or sparse.
+
+• Validation and Safety of Continuous Updates: With continuous change, there’s po- tential to inadvertently break something that was working. We need a monitoring system to catch misalignment regressions.
+
+Related Work: Some recent works (e.g., Mendes et al. [2023] in NLP) have explored continual RLHF, where a model keeps improving with incoming feedback. Many focus on avoiding forgetting by using techniques like Elastic Weight Consolidation or memory replay of old data. In diﬀusion, not much on continual learning has been done publicly, but Wang et al. [2022] (Fine-tuning diﬀusion as control) suggests using small adaptation networks instead of full model tuning. If we keep those small networks per update, maybe modularly turn them on/oﬀ, that could help (like a new adapter for each batch of alignment data, and possibly ensemble or switch between them). There is the concept of model editing from NLP, where given a speciﬁc new piece of info or a new rule, one can directly edit the model weights locally to implement it. Something analogous could be tried for images (though it’s trickier what a “local rule” means). The online RL approach by Uehara et al. [2024a] was episodic (they considered an iterative algorithm with regret guarantee). We might draw on their theoretical tools to guarantee that continuous updates converge to a stable solution that doesn’t oscillate or diverge. Can we make the reward models (or preference models) used for alignment more interpretable and aligned with human-understandable concepts, to increase trust in the alignment process? Cur- rently, reward models are black-box neural networks that output a score. If the diﬀusion model produces something to game that score, it’s hard to understand why. An interpretable reward model might, for example, break down the score into components (say, “image too dark”, “object
+
+missing”, “possibly oﬀensive content”) which not only helps developers debug but could be used to give feedback to the diﬀusion model in a more targeted way (similar to how Focus-N-Fix had categories for ﬁxes).
+
+• Complexity vs Interpretability: Human aesthetic preferences or alignment judgments are complex; any interpretable model might oversimplify. We might need structured knowl- edge (like a list of criteria) to base it on, which could miss unforeseen aspects.
+
+• Obtaining Explanations: Getting human feedback is already hard; getting them to also explain their choices is even harder. But maybe existing datasets have attributes or rationales (some do, albeit small).
+
+• Using Interpretable Models: Approaches like decision trees or rule-based systems for image preference are not likely accurate enough. Perhaps using a multi-label classiﬁcation of issues as the reward model output could be a middle ground (semi-interpretable in that each label has meaning).
+
+• Trust and User Interaction: How to present these interpretations to end-users or model developers so they trust the model is aligned? Possibly by showing evidence that each criterion is being satisﬁed.
+
+Related Work: In NLP RLHF, there’s interest in reward model interpretability to ensure it’s not picking up biases (some have tried to correlate reward model behavior with simple features). Some works on explainable AI for vision create models that output human-interpretable sen- tences about image quality or content. For instance, explaining why an image is low quality (“the background is blurry”, etc.). Some papers (just as an example from language) attempted to align models using natural language feedback instead of numeric reward, essentially making the feedback interpretable to humans. Something analogous could be exploring textual feedback for images (“I don’t like this image because ...”) and using that to guide the model. There are user experience studies showing people trust AI more when it explains itself. For an image generator, a user might appreciate if the system can say “I avoided generating X because it could be unsafe” or “The image might not have matched the prompt exactly, because exact prompt match would cause a weird composition”. We’ll validate interpretability by measuring if the reward model’s factor outputs correlate well with human-annotated reasons. We might run a study where we show an output to a human, ask ”why is this good or bad?”, then see if our model factors identify similar reasons. We also need to ensure the diﬀusion model can still be trained against this factorized reward. If each factor is diﬀerentiable or at least provides gradients (some are classiﬁers, but maybe treat them as diﬀerentiable by some surrogate), we could use AlignProp on each factor. Or do a multi- objective RL where each factor is an objective (similar to Problem 1). This ties somewhat to Problem 1, but here the diﬀerence is focusing on interpretability. Prob- lem 1 deals with multiple objectives as in multi-goal alignment; here it’s more about breaking down one broad objective (human preference) into reasons. In terms of trust: if the model does something unexpected, having this intermediate explanation might help diagnose whether the reward model was oﬀor the generator exploited something. For example, if the generator found a loophole that triggers high aesthetic score but low relevance, we’d see the factors misaligned and know where to adjust. By the end, we aim to produce not just an aligned diﬀusion model, but also a companion system that can justify its outputs in terms of alignment criteria. This could be highly valuable in domains like medical or legal imagery, where trust is paramount, or in any scenario where a developer needs to audit the model’s behavior.
+
+Summary of Proposed Research
+
+Each of the above research problems addresses a vital aspect of alignment and safety:
+
+• Multi-objective alignment extends current methods to handle complex, sometimes conﬂicting goals in a single model.
+
+• Active learning for feedback tackles the data eﬃciency and scalability of alignment, crucial for real-world deployment where data is limited or costly.
+
+• Robust safety alignment proactively defends against misuse, an increasingly important area as generative models become widespread.
+
+• Continual alignment adaptation ensures the model remains relevant and aligned over time, akin to maintaining software with updates.
+
+• Interpretable reward modeling builds user and stakeholder trust in the alignment process, making the “black box” a bit more transparent.
+
+These directions are complementary. For instance, an interpretable reward model can be used in active learning (to decide which aspect to query about), and multi-objective alignment naturally will involve interpretability to balance objectives. We plan to prioritize Problems 1 and 2 in the ﬁrst year (since multi-objective training and active data collection experiments can be started with our current resources), and Problems 3, 4 in the second year (as they might require building on the outcomes of year 1, e.g., robust safety might use the multi-objective framework with high weight on safety; continual adaptation might leverage the active learning setup to get continuous feedback). Problem 5 (interpretability) will be an ongoing thread, with perhaps one dedicated study but also inﬂuencing how we design reward models in the other problems. Through these investigations, we hope to signiﬁcantly advance the state-of-the-art in aligning diﬀusion models safely and eﬃciently, contributing both practical algorithms and theoretical in- sights (e.g., on multi-reward optimization and adversarial training in generative models). Each sub-project will result in publications targeting top venues (NeurIPS, ICML for the algorithmic contributions; perhaps CHI or AIES for the interpretability and HCI aspects of trust).
+
+Diﬀusion models hold immense promise for generative AI, but ensuring their outputs remain aligned with human intentions and ethical norms is an ongoing challenge. In this proposal, we presented a detailed review of recent progress in aligning and making diﬀusion models safer using reinforcement learning and reward modeling techniques. We categorized approaches, from RLHF to direct preference optimization and beyond, and analyzed how they interconnect and build upon each other. While considerable advances have been made — such as ﬁne-tuning diﬀusion models with human feedback to greatly improve prompt adherence Lee et al. [2023] or using reward backprop- agation to eﬃciently boost image quality Clark et al. [2024] — there remain open problems before we can trust these models in sensitive or evolving real-world contexts. The ﬁve research directions proposed aim to address these gaps: combining multiple alignment objectives, reducing reliance on large human-labeled datasets, strengthening resilience to adversarial inputs, enabling continuous learning of preferences, and opening the “black box” of reward models for transparency. The expected contributions of this thesis work are:
+
+• A uniﬁed framework for multi-objective diﬀusion model alignment, validated on simultane- ously improving (for example) accuracy, aesthetics, and safety without trade-oﬀ.
+
+• Novel active learning algorithms that demonstrably reduce the amount of human feedback needed by a substantial factor (e.g., achieving the same alignment with 50% fewer queries).
+
+• An adversarial training regimen that makes a diﬀusion model signiﬁcantly harder to “trick” into producing disallowed content, providing a template for safer model deployment.
+
+• Methods for maintaining alignment over time, including metrics and techniques to measure and prevent alignment drift, and a real-world-inspired system that updates a model as new feedback comes.
+
+• Interpretable reward models that, even if slightly less precise than black-box ones, oﬀer insights into the model’s decision-making and engender greater human trust — alongside experiments quantifying the trade-oﬀs between interpretability and performance.
+
+Addressing these will push the frontier of not just what diﬀusion models can generate, but how and why they generate it, aligning their operation with human values and oversight. This is critical as generative models move from lab settings into daily life applications ranging from content creation to design and beyond. In closing, aligning AI systems with human preferences and ethical principles is a cornerstone of safe AI development. Through the research plan laid out in this proposal, we aim to contribute robust algorithms and insights that ensure diﬀusion models — one of the most exciting and powerful forms of generative AI today — can be harnessed beneﬁcially and safely. This work will also serve as a case study in AI alignment more broadly, potentially informing alignment strategies for other modalities and future generations of generative models. We look forward to carrying out this research and disseminating the ﬁndings to both the academic community and the developers deploying these models in the real world.
+
+Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diﬀusion probabilistic models. In NeurIPS, 2020.
+
+Prafulla Dhariwal and Alexander Nichol. Diﬀusion models beat gans on image synthesis. In Advances in Neural Information Processing Systems (NeurIPS), 2021.
+
+Robin Rombach, Andreas Blattmann, Dominik Lorenz, et al. High-resolution image synthesis with latent diﬀusion models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2022.
+
+Alexander Quinn Nichol and Prafulla Dhariwal. Improved denoising diﬀusion probabilistic models. In ICML, 2021.
+
+Alex Nichol, Prafulla Dhariwal, Aditya Ramesh, Pranav Shyam, Girish Sastry, Amanda Askell, Pe- ter Welinder, Pamela Mishkin Jayanti, Nitish Kapoor, and et al. Glide: Towards photorealistic image generation and editing with text-guided diﬀusion models. In ICML, 2022.
+
+Chitwan Saharia, William Chan, Saurabh Saxena, Lala Li, Jay Whang, Emily Denton, Tim Sal- imans, Jonathan Ho, David J Fleet, and Mohammad Norouzi. Imagen: Photorealistic text-to- image diﬀusion models. In ICML, 2022.
+
+Fei Deng, Ziyu Zhao, Aojun Zeng, Zhen Zhang, Meng Yang, Xiaodong He, et al. Prdp: Proximal reward diﬀerence prediction for large-scale reward ﬁnetuning of diﬀusion models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024a.
+
+Mihir Prabhudesai, Anirudh Goyal, Deepak Pathak, and Katerina Fragkiadaki. Align- ing text-to-image diﬀusion models with reward backpropagation, 2024. URL https://arxiv.org/abs/2310.03739.
+
+Kimin Lee, Hao Liu, Moonkyung Ryu, Olivia Watkins, Yuqing Du, Craig Boutilier, Pieter Abbeel, Mohammad Ghavamzadeh, and Shixiang Shane Gu. Aligning text-to-image models using human feedback, 2023. URL https://arxiv.org/abs/2302.12192.
+
+Shentao Yang, Tianqi Chen, and Mingyuan Zhou. A dense reward view on aligning text-to-image diﬀusion with preference. In International Conference on Machine Learning (ICML), 2024a.
+
+Jiazheng Xu, Ziyang Yang, Weizhe Shi, Yujun Wang, Xiaoxiao Wang, Li Zhang, et al. Imagere- ward: Learning and evaluating human preferences for text-to-image generation. In Advances in Neural Information Processing Systems (NeurIPS), 2023.
+
+Long Ouyang, Jeﬀrey Wu, Xu Jiang, and et al. Training language models to follow instructions with human feedback. In Advances in Neural Information Processing Systems (NeurIPS), 2022.
+
+Paul F Christiano, Jan Leike, Tom B Brown, and et al. Deep reinforcement learning from human preferences. In Advances in Neural Information Processing Systems (NeurIPS), 2017.
+
+Ying Fan, Hang Su, Jun Zhu, and Bo Dai. Dpok: Reinforcement learning for ﬁne-tuning text- to-image diﬀusion models. In Advances in Neural Information Processing Systems (NeurIPS), 2023.
+
+Raphael Rafailov, Kimin Lee, Kevin Hsu, and Sergey Levine. Direct preference optimization: Your language model is secretly a reward model. In NeurIPS, 2023.
+
+Kevin Clark, Paul Vicol, Kevin Swersky, and David J. Fleet. Directly ﬁne-tuning diﬀusion models on diﬀerentiable rewards. In The Twelfth International Conference on Learning Representations, 2024. URL https://openreview.net/forum?id=1vmSEVL19f.
+
+Xiaoying Xing, Sihui Chen, and Yang Song. Focus-n-ﬁx: Region-aware ﬁne-tuning for text-to- image generation. In CVPR, 2025a.
+
+Ziyi Zhang et al. Confronting reward overoptimization for diﬀusion models: A perspective of inductive and primacy biases. In ICML, 2024a.
+
+Masatoshi Uehara et al. Feedback eﬃcient online ﬁne-tuning of diﬀusion models. In ICML, 2024a.
+
+Aditya Ramesh, Prafulla Dhariwal, Alex Nichol, et al. Hierarchical text-conditional image gener- ation with clip latents. arXiv preprint arXiv:2204.06125, 2022a.
+
+Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Stefano Ermon, and Ben Poole. Score-based generative modeling through stochastic diﬀerential equations, 2021. URL https://arxiv.org/abs/2011.13456.
+
+Aditya Ramesh, Alex Nichol, Prafulla Dhariwal, et al. Hierarchical text-conditional image gener- ation with clip latents. arXiv preprint arXiv:2204.06125, 2022b.
+
+Ziyi Zhang, Li Shen, Sen Zhang, Deheng Ye, Yong Luo, Miaojing Shi, Bo Du, and Dacheng Tao. Aligning few-step diﬀusion models with dense reward diﬀerence learning, 2024b. URL https://arxiv.org/abs/2411.11727.
+
+Yuchen Xing, Ming Zhao, and Vishal M. Patel. Focus-n-ﬁx: Region-aware ﬁne-tuning for safer and higher-quality diﬀusion models. In CVPR, 2025b.
+
+Harrison Lee, Samrat Phatale, Hassan Mansoor, Thomas Mesnard, Johan Ferret, Kellie Lu, Colton Bishop, Ethan Hall, Victor Carbune, Abhinav Rastogi, and Sushant Prakash. Rlaif vs. rlhf: Scaling reinforcement learning from human feedback with ai feedback, 2024a. URL https://arxiv.org/abs/2309.00267.
+
+Florian Bordes, Richard Yuanzhe Pang, Anurag Ajay, Alexander C. Li, Adrien Bardes, Suzanne Petryk, Oscar Ma˜nas, Zhiqiu Lin, Anas Mahmoud, Bargav Jayaraman, Mark Ibrahim, Melissa Hall, Yunyang Xiong, Jonathan Lebensold, Candace Ross, Srihari Jayakumar, Chuan Guo, Diane Bouchacourt, Haider Al-Tahan, Karthik Padthe, Vasu Sharma, Hu Xu, Xiaoqing Ellen Tan, Megan Richards, Samuel Lavoie, Pietro Astolﬁ, Reyhane Askari Hemmat, Jun Chen,
+
+Kushal Tirumala, Rim Assouel, Mazda Moayeri, Arjang Talattof, Kamalika Chaudhuri, Zechun Liu, Xilun Chen, Quentin Garrido, Karen Ullrich, Aishwarya Agrawal, Kate Saenko, Asli Celikyilmaz, and Vikas Chandra. An introduction to vision-language modeling, 2024. URL https://arxiv.org/abs/2405.17247.
+
+Shashank Gupta, Chaitanya Ahuja, Tsung-Yu Lin, Sreya Dutta Roy, Harrie Oosterhuis, Maarten de Rijke, and Satya Narayan Shukla. A simple and eﬀective reinforcement learning method for text-to-image diﬀusion ﬁne-tuning, 2025. URL https://arxiv.org/abs/2503.00897.
+
+Martin Heusel, Hubert Ramsauer, Thomas Unterthiner, Bernhard Nessler, and Sepp Hochreiter. Gans trained by a two time-scale update rule converge to a local nash equilibrium. Advances in neural information processing systems, 30, 2017.
+
+Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi. Blip: Bootstrapping language-image pre- training for uniﬁed vision-language understanding and generation. In International conference on machine learning, pages 12888–12900. PMLR, 2022.
+
+Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International conference on machine learning, pages 8748–8763. PmLR, 2021.
+
+Christoph Schuhmann, Romain Beaumont, Richard Vencu, Cade Gordon, Ross Wightman, Mehdi Cherti, Theo Coombes, Aarush Katta, Clayton Mullis, Mitchell Wortsman, et al. Laion-5b: An open large-scale dataset for training next generation image-text models. Advances in neural information processing systems, 35:25278–25294, 2022.
+
+Xiaoshi Wu, Yiming Hao, Keqiang Sun, Yixiong Chen, Feng Zhu, Rui Zhao, and Hongsheng Li. Human preference score v2: A solid benchmark for evaluating human preferences of text-to- image synthesis, 2023. URL https://arxiv.org/abs/2306.09341.
+
+Yuval Kirstain, Adam Polyak, Uriel Singer, Shahbuland Matiana, Joe Penna, and Omer Levy. Pick-a-pic: An open dataset of user preferences for text-to-image generation, 2023. URL https://arxiv.org/abs/2305.01569.
+
+Bram Wallace, Meihua Dang, Rafael Rafailov, Linqi Zhou, Aaron Lou, Senthil Purushwalkam, Stefano Ermon, Caiming Xiong, Shaﬁq Joty, and Nikhil Naik. Diﬀusion model alignment using direct preference optimization, 2023. URL https://arxiv.org/abs/2311.12908.
+
+Tao Li, Ziyang Wang, Tianyi Zhang, et al. Aligning text-to-image diﬀusion models with human utility. In Advances in Neural Information Processing Systems (NeurIPS), 2024a.
+
+Fan Yang, Yujing Zhang, Lei Yu, et al. D3po: Direct preference for denoising diﬀusion policy optimization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024b.
+
+Huaisheng Zhu, Teng Xiao, and Vasant G Honavar. DSPO: Direct score preference optimiza- tion for diﬀusion model alignment. In The Thirteenth International Conference on Learning Representations, 2025. URL https://openreview.net/forum?id=xyfb9HHvMe.
+
+Diederik P. Kingma and Max Welling. An introduction to variational autoencoders. Foun- dations and Trends® in Machine Learning, 12(4):307–392, 2019. ISSN 1935-8245. doi: 10.1561/2200000056. URL http://dx.doi.org/10.1561/2200000056.
+
+Buhua Liu, Shitong Shao, Bao Li, Lichen Bai, Zhiqiang Xu, Haoyi Xiong, James Kwok, Sumi Helal, and Zeke Xie. Alignment of diﬀusion models: Fundamentals, challenges, and future, 2024a. URL https://arxiv.org/abs/2409.07253.
+
+Wei Jia, Rui Zhao, Lucas Smith, et al. Lasro: Latent space reward optimization for diﬀusion mod- els. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2025.
+
+Lucas Smith, Rui Wang, Mei Chen, et al. Diﬀusion-dpo: Direct preference optimization for diﬀusion models. In International Conference on Machine Learning (ICML), 2024.
+
+Sangwoo Lee, Juhong Kim, Seojin Park, and Youngjin Choi. Diﬀusion-kto: Utility-guided diﬀusion model alignment without reward models. In Advances in Neural Information Processing Systems (NeurIPS), 2024b.
+
+Runtao Liu, Chen I Chieh, Jindong Gu, Jipeng Zhang, Renjie Pi, Qifeng Chen, Philip Torr, Ashkan Khakzar, and Fabio Pizzati. Safetydpo: Scalable safety alignment for text-to-image generation, 2024b. URL https://arxiv.org/abs/2412.10493.
+
+Xiaolin Zhang, Yifan Chen, Jiuxiang Gu, and Jia-Bin Huang. Learning surrogate rewards for preference optimization in diﬀusion models. In International Conference on Computer Vision (ICCV), 2024c.
+
+Shufan Li, Konstantinos Kallidromitis, Akash Gokul, Yusuke Kato, and Kazuki Kozuka. Aligning diﬀusion models by optimizing human utility, 2024b. URL https://arxiv.org/abs/2404.04465.
+
+Jialu Miao, Haoran Liu, and Yitong Chen. Pso: Preference score optimization for aligning diﬀusion models. In ICLR, 2025.
+
+Fei Deng, Qifei Wang, Wei Wei, Matthias Grundmann, and Tingbo Hou. Prdp: Proximal re- ward diﬀerence prediction for large-scale reward ﬁnetuning of diﬀusion models, 2024b. URL https://arxiv.org/abs/2402.08714.
+
+Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Doll´ar, and Ross Girshick. Segment anything, 2023. URL https://arxiv.org/abs/2304.02643.
+
+Ruihan Zhang, Yitao Huang, Wei Yang, and Yichong Li. Tdpo: Temporal diﬀusion preference optimization for stepwise reward alignment. In ICML, 2024d.
+
+Shuhao Liao, Xuxin Lv, Yuhong Cao, Jeric Lew, Wenjun Wu, and Guillaume Sar- toretti. Helm: Human-preferred exploration with language models, 2025. URL https://arxiv.org/abs/2503.07006.
+
+Masashi Uehara, Ryo Takahashi, and Yuta Shibata. A tutorial on reinforcement learning and preference optimization for diﬀusion models. arXiv preprint arXiv:2404.01234, 2024b.
+
+Oﬁr Nachum, Mohammad Norouzi, Kelvin Xu, and Dale Schuurmans. Bridging the gap between value and policy based reinforcement learning, 2017. URL https://arxiv.org/abs/1702.08892.
+
+Erick Mendes, Shibani Santurkar, David Krueger, C. Lawrence Zitnick, Deep Ganguli, Joshua B Tenenbaum, and Dimitris Tsipras. Evolving and aligning language models with ongoing human feedback. In Advances in Neural Information Processing Systems, 2023.
+
+Yilun Wang, Aravind Rajeswaran Singh, Jimmy Ba, Aravind Srinivas, William Freeman, and Joshua Tenenbaum. Diﬀusion policies as an expressive policy class for oﬄine reinforcement learning. In Advances in Neural Information Processing Systems, 2022.

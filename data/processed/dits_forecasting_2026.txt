@@ -1,0 +1,597 @@
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Haoran Zhang * 1 Haixuan Liu * 1 Yong Liu * 1 Yunzhong Qiu 1
+
+Yuxuan Wang 1 Jianmin Wang 1 Mingsheng Long 1
+
+While generative modeling on time series facili- tates more capable and flexible probabilistic fore- casting, existing generative time series models do not address the multi-dimensional properties of time series data well. The prevalent archi- tecture of Diffusion Transformers (DiT), which relies on simplistic conditioning controls and a single-stream Transformer backbone, tends to un- derutilize cross-variate dependencies in covariate- aware forecasting. Inspired by Multimodal Dif- fusion Transformers that integrate textual guid- ance into video generation, we propose Diffusion Transformers for Time Series (DiTS), a general- purpose architecture that frames endogenous and exogenous variates as distinct modalities. To bet- ter capture both inter-variate and intra-variate de- pendencies, we design a dual-stream Transformer block tailored for time-series data, comprising a Time Attention module for autoregressive mod- eling along the temporal dimension and a Vari- ate Attention module for cross-variate model- ing. Unlike the common approach for images, which flattens 2D token grids into 1D sequences, our design leverages the low-rank property inher- ent in multivariate dependencies, thereby reduc- ing computational costs. Experiments show that DiTS achieves state-of-the-art performance across benchmarks, regardless of the presence of future exogenous variate observations, demonstrating unique generative forecasting strengths over tradi- tional deterministic deep forecasting models.
+
+Natural Language Image & Video
+
+A fluffy Birman cat with blue eyes and a dark face mask, head tilted, lying on a white table, soft studio lighting, bokeh background, photorealistic.
+
+arXiv:2602.06597v1  [cs.LG]  6 Feb 2026
+
+Multimodal Diffusion Transformer
+
+Figure 1. Structural homogeneity between multimodal genera- tion and multivariate forecasting. DiTS treats variates as distinct, high-fidelity streams in MM-DiT (Esser et al., 2024) style, which enables the model to leverage modality-level feature discrepancies while maintaining conditional control via fine-grained interaction.
+
+Multivariate Time Series
+
+global-scale forecasting. In modern applications, the vari- ation of an endogenous variate is rarely standalone; it is governed by an intricate interplay of internal temporal de- pendencies and diverse exogenous factors, ranging from physical environmental signals to socio-economic indica- tors. By incorporating multi-dimensional external contexts, models can better account for the intricate factors that drive future outcomes. Notwithstanding its importance, incorpo- rating exogenous factors remains challenging due to their intrinsic multidimensionality. This property entails diverse data scales, varying sampling frequencies, and complex inter-dependencies among heterogeneous features, which create a substantial information bottleneck, hindering the ability of forecasters to effectively distill guidance from the exogenous context while modeling temporal dependencies.
+
+Time series forecasting is a cornerstone of critical decision- making, extending across a broad spectrum of real-world applications ranging from granular system monitoring to
+
+Meanwhile, the development of deep forecasting models has been largely characterized by deterministic frameworks, with Transformer-based architectures emerging as a promi- nent paradigm. While prior attempts such as PatchTST (Nie et al., 2023) and iTransformer (Liu et al., 2024a) have ad- vanced the state-of-the-art by refining tokenization or in- verting attention dimensions, they exhibit limitations when dealing with the multidimensionality inherent in time series data. Nevertheless, a critical dilemma persists among exist-
+
+*Equal contribution 1 School of Software, BNRist, Tsinghua University. Haoran Zhang <zhang-hr24@mails.tsinghua.edu.cn>. Haixuan Liu <liuhaixu21@mails.tsinghua.edu.cn>. Yong Liu <liuyong21@mails.tsinghua.edu.cn>. Correspondence to: Ming- sheng Long <mingsheng@tsinghua.edu.cn>.
+
+ing methods: they must either flatten dimensions, leading to prohibitive computational costs (Liu et al., 2024b), or em- ploy channel-independence strategies (Nie et al., 2023) that sacrifice essential inter-variate correlations for intra-variate dependencies. Furthermore, as deterministic forecasters, these architectures natively lack the capability to quantify the probabilistic uncertainty inherent in future predictions.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+costs of flattened 2D sequences, providing a high-fidelity method for multi-dimensional probabilistic forecasting. Our main contributions are summarized as follows:
+
+• We propose DiTS, a covariate-aware and diffusion- based time series forecaster that fully leverages the MM-DiT architecture, offering a generic backbone for high-dimensional conditional generation.
+
+Recently, generative modeling has undergone a paradigm shift with the emergence of Diffusion Transformers (Pee- bles & Xie, 2023). Specifically, Multimodal DiT (MM- DiT) (Esser et al., 2024) has demonstrated that decoupling modalities into independent processing streams through ex- clusive interaction via attention yields superior control over generation. As illustrated in Figure 1, we identify a profound structural homogeneity between multimodal generation and covariate-aware forecasting. The modulatory influence of exogenous variates on the target variate is highly analogous to the role of textual prompts in conditional image genera- tion beyond the role as auxiliary features. This perspective implies that endogenous and exogenous variates should be treated as distinct streams, enabling the model to further exploit dependencies shared across variates.
+
+• We introduce a dual-stream attention mechanism that explicitly factorizes modeling into time and variate axes, skillfully treating the variate dimension as a dis- tinct modality for exogenous variate injection.
+
+• DiTS achieves state-of-the-art performance on covariate-aware forecasting. By rigorous ablation stud- ies, we confirm the superiority of our design on the attention mechanism and the condition control method.
+
+Transformers have been widely used in the field of mul- tivariate time series analysis. Early attempts, such as PatchTST (Nie et al., 2023), emphasize the intra-variate dependencies through adopting a channel-independent strat- egy to mitigate noise. In contrast, iTransformer (Liu et al., 2024a) inverts the traditional Transformer architecture by treating entire univariate series as tokens, thereby prioritiz- ing global inter-variate correlations. To balance these two perspectives, TimeXer (Wang et al., 2024b) introduces an asymmetric modeling approach, investing quadratic com- plexity in the temporal dimension while utilizing efficient cross-attention for variate interactions. More comprehen- sive dependencies are captured by models that jointly con- sider both dimensions. Timer-XL (Liu et al., 2024b) per- forms a flattening of the time-variate grid to model fully- connected relationships with prohibitive computational over- head. Crossformer (Zhang & Yan, 2022) proposes a two- stage dimension-decoupled structure that relies on router tokens to facilitate cross-dimension communication.
+
+2.1. Transformers for Multivariate Time Series
+
+However, while current diffusion-based time series fore- casters typically rely on U-Nets or simple RNNs (Rasul et al., 2021), the alignment of Diffusion Transformers (DiT) architectures and multivariate time series remains under- explored. While recent works have attempted to bridge this gap, they tend to embed exogenous variates merely via simplistic Adaptive LayerNorm (AdaLN) or utilize a single- stream architecture to perform univariate modeling based on intensive encoders like Sundial (Liu et al., 2025b). Such approaches compress the temporal variations of covariates into modulating factors, failing to exploit the fine-grained, token-level interactions necessary for high-fidelity forecast- ing. There exists a vacuum for a multidimensionality-aware DiT framework that treats endogenous and exogenous vari- ates as interacting high-dimensional representations.
+
+To address these challenges, we introduce Diffusion Trans- formers for Time Series (DiTS), a generic architecture that reformulates generative forecasting by utilizing multivariate data to perform condition control within a dual-stream archi- tecture. Leveraging the flow matching framework (Lipman et al., 2022) to ensure training stability and efficient sam- pling, DiTS transcends the limitations of scalar-modulated DiTs on time series. Crucially, we propose an explicit mod- eling approach that disentangles dependencies into orthog- onal axes: Time Attention for capturing intra-variate de- pendencies and Variate Attention for modeling inter-variate correlations. This design functions as a learnable low-rank decomposition, enabling the model to learn the regressive re- lations from exogenous to endogenous variates through fine- grained conditional control. DiTS avoids the prohibitive
+
+As shown in Figure 2, the application of Transformers to multivariate time series is non-trivial due to the inherent heterogeneity between the time and variate dimensions. Un- like tokens in natural language (Vaswani et al., 2017) and image (Dosovitskiy et al., 2020), multivariate time series are characterized by lower information density and strict temporal alignment across channels, which is dissoluble.
+
+Although early frameworks such as CSDI (Tashiro et al., 2021) and TimeGrad (Rasul et al., 2021) pioneer the use of diffusion models for time series, they relied on vanilla Transformers for imputation or RNN-based architectures for
+
+2.2. Diffusion Models for Time Series
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Multivariate Time Series
+
+Figure 2. Structural comparison of multivariate architectures. Existing Transformer-based forecasters typically adopt either channel- independent (Nie et al., 2023) or asymmetric modeling strategies (Wang et al., 2024b), and thorough modeling among inter-variate patches often leads to excessive complexity while achieving the refined granularity (Liu et al., 2024b). DiTS employs a dual-stream design that treats time and variate dimensions as orthogonal axes, enabling efficient but fine-grained interaction akin to multimodal generation.
+
+Fine-grained Modeling
+
+forecasting. Subsequent explorations, including SSSD (Al- caraz & Strodthoff, 2022), attempt to leverage structured state-space models with convolutional backbones, yet re- main limited in their architectural flexibility. With the ad- vent of the Diffusion Transformer (DiT) (Peebles & Xie, 2023), recent works like LDT (Feng et al., 2024) introduce single-stream structures without sophisticated designs for exogenous variate fusion. Furthermore, the development of diffusion-based time series foundation models remains in its infancy. For instance, Cao et al. (2024) use DiT to construct the time series foundation model without the adaptation to the inherent properties of multivariate time series, while Sundial (Liu et al., 2025b) adopts an asymmetric encoder- denoiser design akin to MAR (Li et al., 2024), which differs from the conventional DiT architecture.
+
+In this section, we detail the architecture and theoretical foundation of DiTS, a diffusion-based time series forecaster designed to address the contradiction between covariate- aware forecasting demands and expensive fine-grained time series relationship modeling. We implement the training and probabilistic forecasting inference within the framework of flow matching based on a rational two-dimensional grid attention mechanism and a conditional injection method.
+
+The transition to Transformers marks a significant shift toward scalability and architectural unification in gener- ative modeling. Peebles & Xie (2023) first demonstrate that Transformer-based backbones could surpass traditional con- volutional models by introducing adaLN-Zero. Subsequent advancements, such as PixArt-α (Chen et al., 2023), further refine this paradigm by utilizing cross attention to facili- tate efficient text-to-image interaction, thus enabling more complex conditioning contexts. Multimodal DiT (MM- DiT) (Esser et al., 2024) architecture parameterizes velocity fields rather than noise, utilizing symmetric, parallel streams to process disparate modalities. This approach allows for latent feature fusion through shared attention layers while maintaining the distinct characteristics of each input.
+
+2.3. Diffusion Transformers
+
+PatchEmbedc PatchEmbedx MLPcond
+
+Multimodal Diffusion Transformer
+
+Figure 3. Overall architecture of DiTS. We regard the endogenous variate and exogenous variate as modes x and c of MM-DiT input, cooperate with the modulation signal y for interaction, and finally transform the output flow of x into a denoising velocity field.
+
+Exogenous Variates Endogenous Variate
+
+Despite their prevalence in other domains, AdaLN mod- ulation for structural data such as multivariate time se- ries remains under-explored. Leveraging the natural cor- respondence between time series and multimodal data, DiTS frames endogenous and exogenous variates as dis- tinct modalities. This MM-DiT-inspired design effectively captures their interactions, providing a robust and flexible framework for high-fidelity forecasting.
+
+We adopt the flow matching paradigm, specifically recti- fied flow (Lipman et al., 2022; Liu et al., 2022a), for its analytical tractability and transport properties compared to standard diffusion probabilistic models. Let x0 ∈RD de- note a clean data sample from the data distribution q(x), and ϵ ∼N(0, I) denote a sample from a standard Gaussian distribution. The goal is to define a probability path pt(x) for t ∈[0, 1] that transforms the noise distribution p1 to
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Variate Attention Module
+
+Variate Attention Module
+
+Time Attention Module
+
+𝛼!, 𝛽!, 𝛾! 𝛼", 𝛽", 𝛾" 𝛼#, 𝛽#, 𝛾#
+
+Figure 4. Schematic illustration of the DiTS Block. Here, T, V , and F denote the modulation parameters for the time attention, variate attention, and FFN modules, respectively. Given the heterogeneity of the dual streams x and c, we employ shared time attention and FFN to model inter-token dependencies and intra-token information interaction. Conversely, joint attention facilitates variate-level interaction, enabling the denoising process of the endogenous variate window to be guided by covariate-based conditional control.
+
+the data distribution p0. We define the forward process as a linear interpolation between the clean data and noise:
+
+xt = (1 −t)x0 + tϵ, t ∈[0, 1], (1)
+
+use re-normalization (Liu et al., 2022b) for each sample to reduce instability. Given a unique endogenous variate, only its own statistics are employed for re-normalization to by- pass potential cross-dimensional value scale discrepancies.
+
+where ϵ ∼N(0, I). This formulation defines a vector field that flows along straight paths connecting data and noise samples. We learn a network velocity field vθ(xt, t, c) pa- rameterized by θ and conditioned on auxiliary information c, which approximates the true time-dependent vector field.
+
+Patch Embedding Let [x0,his, y0,pred] denote the endoge- nous variate and t denote diffusion timestep, then accord- ing to 1 x0,pred = ty0,pred + (1 −t)ϵ. Given multivariate time series X = [x0, x1, x2, ..., xC] ∈RT ×(C+1) com- prising one endogenous variate and C exogenous variates where x0 = [x0,his, x0,pred], each xi ∈RT is partitioned into N = ⌈T
+
+The training objective, known as conditional flow match- ing, is formulated by minimizing the mean squared error between the predicted velocity and the target drift. Since the path is linear, the target velocity is (ϵ −x0):
+
+P ⌉patches of patch length P. Considering the heterogeneity among variates, the endogenous variate and the exogenous variates are embedded separately.
+
+Lvelocity(θ) := Ex0,ϵ,t h ∥vθ(xt, t, c) −(ϵ −x0)∥2i . (2)
+
+Z0 x = PatchEmbedx(x0),
+
+Z0 c = PatchEmbedc(x1:C), (4)
+
+Once trained, samples are generated by solving the ordinary differential equation defined by the learned velocity field. Starting from Gaussian noise x1 ∼N(0, I), we integrate backward in time toward t = 0 using an Euler solver:
+
+where Z0 x ∈ZN×D×1, Z0 c ∈RN×D×C denote the initial embeddings for the target stream and the condition stream.
+
+In the overall design of DiTS, x represents the latent en- coded from endogenous time-series variate while c repre- sents the diffusion timestep and exogenous variates in the form of distinct latent stream and conditioning embedding.
+
+xt−∆t = xt −vθ(xt, t, c)∆t. (3)
+
+Leveraging the insight that multivariate time series data ex- hibits low information density and distinct structural proper- ties across time and variate dimensions, we design the DiTS Block to decompose the learning process into orthogonal temporal processing and inter-variate interaction as actually a low-rank decomposition. As shown in Figure 4, each block processes the endogenous latent Zx and exogenous latent Zc through a mechanism that alternates between distinct temporal extrapolation and joint variate regression under the strict adaptive control of the conditioning embedding Zy.
+
+3.2. Time Series Tokenization
+
+Re-Normalization In order to reduce the possible impact of the unstable range of values in the denoising process, we
+
+Adaptive Modulation Unlike prior works (Wang et al., 2024b; Liu et al., 2024b) that rely on token concatenation, DiTS additionally injects Zy into every sub-layer via a fine- grained modulation mechanism. The MLP projects Zy into a set of layer-specific modulation parameters:
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Given that inter-variate dependencies are modeled by the attention layers, the latent manifolds of time series across variates should remain stable at the patch level. Accordingly, a shared FFN is adopted for intra-token refinement.
+
+Consequently, a DiTS block adaptively integrates intra- variate, inter-variate, and inter-token perspectives, facil- itating a multi-granularity representation learning of multi- variate time series.
+
+where β, γ ∈RD represent the scale and shift factors for AdaLN, and α ∈RD serves as a learnable gate controlling the residual contribution. We define the modulation opera- tion Mod(h, γ, β) = γ ⊙LN(h) + β, which dynamically aligns the endogenous latent distribution of the time series with the target diffusion step and covariate context.
+
+{αm, βm, γm}m∈{T,V,F } = MLPmod(Zy), (5)
+
+The backbone of DiTS consists of a sequence of L DiTS blocks that facilitate deep interaction between the target and covariate streams. We use a global conditioning embedding Zy to guide the denoising process by incorporating latents from both the diffusion timestep and covariates.
+
+Time Attention Module Given the proven efficacy of temporal extrapolation in univariate forecasting models (Nie et al., 2023), we first model the intra-variate dependencies of each variate distinctly. Considering the generalizability of the temporal pattern of variates, we use a shared attention for time modeling x and c. For stream s ∈{x, c}:
+
+For efficient aggregation, we follow the variate-as-token paradigm (Liu et al., 2024a) that each of the C covariates is projected into a variate token of dimension D. Follow- ing Wang et al. (2024b), we then aggregate these tokens via averaging to form a holistic covariate representation, while the diffusion timestep t is mapped to a temporal embedding using Sinusoidal Encoding. Zy is obtained as follow:
+
+where MSAtime denotes Multi-Head Self-Attention applied over the time dimension T. This ensures that the temporal dynamics are refined before interacting with other variates.
+
+Htime s = MSAtime(Mod(Zs, γT , βT )), ˆZs = Zs + αT ⊙Htime s , (6)
+
+ecov = Mean(VariateEmbed(xi))
+
+Variate Attention Module. To capture correlations be- tween endogenous and exogenous streams, we introduce Variate Attention, a joint attention mechanism aimed at inter- variate dependencies. Inspired by MM-DiT, we employ in- dependent linear projections for each stream to respect their heterogeneous latent spaces. Let Us = Mod(ˆZs, γV , βV ) for s ∈{x, c}. We compute the joint attention output as:
+
+where Zy ∈RD serves as the adaptive conditioning vector for all subsequent AdaLN (Peebles & Xie, 2023) layers.
+
+etime = Sinusoidal(t),
+
+Zy = ecov + etime, (10)
+
+The initial latent representations Z0 x and Z0 c are propa- gated through L successive DiTS blocks. In each layer l ∈{1, . . . , L}, the target and condition streams undergo multimodal interaction modulated by Zy:
+
+[Hvar x ; Hvar c ] = Joint-Attn   {Qs, Ks, Vs, WO s }s  , (7)
+
+(Zl x, Zl c) = DiTS-Blockl(Zl−1 x , Zl−1 c , Zy), (11)
+
+where each stream s independently projects Us to its own Qs, Ks, Vs and maps the concatenated attention result via a stream-specific WO s . To accommodate the divergence in scales and physical modalities across variates, employing unshared parameters for the endogenous and exogenous streams facilitates a more nuanced modeling of their respec- tive latent spaces. The latents are then updated via:
+
+where Zl x and Zl c denote the refined latents. The dual- stream design ensures the model effectively exploits the cross-modal correlations between the endogenous and ex- ogenous variates while keeping the structural integrity.
+
+We conduct extensive evaluations of DiTS’s forecasting per- formance, encompassing benchmarks on covariate-aware forecasting datasets—regardless of the presence of exoge- nous variates—as well as an assessment of its native proba- bilistic forecasting capabilities. Furthermore, we provide an in-depth analysis of the model’s capability for endogenous variate modeling in univariate settings, and discuss the im- pact of various attention mechanisms and condition control on DiTS’s efficacy. Full results can be seen in Appendix D.
+
+Feed-Forward Network. Finally, the representations pass through a point-wise Feed-Forward Network (FFN) to syn- thesize the features:
+
+˜Zs = ˆZs + αV ⊙Hvar s . (8)
+
+Zs = ˜Zs + αF ⊙FFN(Mod(˜Zs, γF , βF )). (9)
+
+Ours (DiTS) Pre-trained Models (Zero-Shot) Pre-trained Models (Other) Statistical Methods
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Toto-1.0 Moirai-2.0 Chronos-Bolt
+
+AutoARIMA Sundial-Base
+
+0.05 0.10 0.15 Average WQL
+
+AutoARIMA Sundial-Base
+
+0.4 0.6 0.8 1.0 1.2 Average MASE
+
+Figure 5. Probabilistic forecasting performance comparison on the FEV leaderboard subset. We report the Average Weighted Quantile Loss (WQL) and Mean Absolute Scaled Error (MASE) across various competitive baselines. DiTS consistently achieves the lowest error across both metrics, demonstrating its robust probabilistic modeling capability. Full results can be found in Table 6.
+
+Table 1. Deterministic forecasting performance on the EPF dataset with known future covariates. The evaluation includes five subsets (NP, PJM, BE, FR, DE) and the overall average on two settings of H = 24 and H = 360. Results are presented in terms of MSE and MAE. DiTS outperforms baseline models while achieving significant error reduction. The best results are in bold and the second-best are underlined. Results of partial baseline models are reported by (Qiu et al., 2025b). Full results can be found in Table 7.
+
+MODEL DITS TIMEXER DAG ITRANS. CROSS. DUET TIDE TFT
+
+METRIC MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+NP 0.271 0.301 0.375 0.355 0.362 0.344 0.354 0.373 0.308 0.328 0.411 0.408 0.443 0.400 0.379 0.375 PJM 0.082 0.174 0.124 0.225 0.093 0.180 0.098 0.197 0.119 0.212 0.102 0.197 0.142 0.246 0.114 0.207 BE 0.376 0.266 0.432 0.279 0.423 0.279 0.513 0.345 0.403 0.268 0.515 0.354 0.498 0.325 0.454 0.291 FR 0.360 0.218 0.415 0.230 0.414 0.219 0.484 0.261 0.412 0.232 0.496 0.327 0.484 0.281 0.504 0.257 DE 0.279 0.322 0.406 0.391 0.370 0.370 0.408 0.407 0.356 0.376 0.482 0.430 0.499 0.447 0.489 0.446
+
+4.1. Time Series Covariate-aware Forecasting
+
+In real-world scenarios, covariates derived from real-world tasks and requirements are often highly coupled and en- riched with domain-specified knowledge, providing a ro- bust foundation for forecasting. While domain-agnostic time series models are still in their infancy, domain-specific forecasts remain remarkably reliable. Consequently, lever- aging existing heterogeneous covariate predictions from forecasters for regression-based endogenous forecasting holds immense practical value, underscoring the necessity of covariate-aware forecasting and the significance of DiTS.
+
+AVG 0.274 0.256 0.350 0.296 0.332 0.278 0.371 0.317 0.320 0.283 0.401 0.343 0.413 0.340 0.388 0.315
+
+2024), AutoARIMA (Hyndman & Khandakar, 2008), and Seasonal-Na¨ıve. To align with our primary objective of eval- uating the forecasting capability of pure covariate scenarios, we curated a subset of datasets from the leaderboard that feature both known covariates and a single target variate. Additionally, datasets that are excessively large or short are filtered out to meet the fitting requirements of DiTS.
+
+Figure 5 illustrates our evaluation results on this leaderboard. Compared to advanced zero-shot or fine-tuned pre-trained foundation models, DiTS demonstrates consistent perfor- mance improvements, validating its fundamental capabili- ties as a robust and adaptive probabilistic forecaster.
+
+To fully exploit the native probabilistic forecasting capa- bilities of our model, we evaluate its performance on a representative subset of the FEV leaderboard (Shchur et al., 2025) datasets, utilizing uncertainty-aware metrics for a comprehensive assessment. Furthermore, considering the demands of definitive outcomes in practical scenarios, we extend our evaluation to deterministic forecasting tasks. Probabilistic Forecasting We extensively consider ad- vanced time series forecasting methods, ranging from sta- tistical methods to foundation models, including Chronos-2 (Ansari et al., 2025), TiRex (Auer et al., 2025), TimesFM- 2.5 (Das et al., 2023b), Moirai-2.0 (Liu et al., 2025a), Toto- 1.0 (Cohen et al., 2024), TabPFN-TS (Hoo et al., 2025), Sundial-Base (Liu et al., 2025b), Chronos-Bolt (Ansari et al.,
+
+Deterministic Forecasting For deterministic evalua- tion metrics, we select the Electricity Price Forecast- ing (EPF) (Lago et al., 2021) dataset, where forecasting with exogenous variates serves as a highly versatile atomic task. DiTS generates multiple candidate predictions via sampling during inference and computes the average at each timestamp to align with evaluation. Regarding the baseline models, we incorporated Transformer-based architectures such as TimeXer (Wang et al., 2024b), iTransformer (Liu et al., 2024a), PatchTST (Nie et al., 2023), and Crossformer (Zhang & Yan, 2022). We also included traditional back- bones, including DAG (Qiu et al., 2025b), DUET (Qiu et al., 2025a), TiDE (Das et al., 2023a), TimesNet (Wu et al.,
+
+Table 2. Deterministic forecasting performance on the EPF dataset in the future-agnostic scenario (without future information). We focus on the short-term horizon (L = 168, H = 24). DiTS maintains its state-of-the-art performance, demonstrating superior robustness even when relying solely on historical information. The best results are in bold and the second-best are underlined. Results of baseline models are officially reported by (Wang et al., 2024b).
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+MODEL DITS TIMEXER ITRANS. PATCHTST CROSS. TIDE TIMESNET DLINEAR
+
+METRIC MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+NP 0.225 0.260 0.236 0.268 0.265 0.300 0.267 0.284 0.240 0.285 0.335 0.340 0.250 0.289 0.309 0.321 PJM 0.073 0.164 0.093 0.192 0.097 0.197 0.106 0.209 0.101 0.199 0.124 0.228 0.097 0.195 0.108 0.215 BE 0.378 0.260 0.379 0.243 0.394 0.270 0.400 0.262 0.420 0.290 0.523 0.336 0.419 0.288 0.463 0.313 FR 0.332 0.197 0.385 0.208 0.439 0.233 0.411 0.220 0.434 0.208 0.510 0.290 0.431 0.234 0.429 0.260 DE 0.420 0.403 0.440 0.415 0.479 0.443 0.461 0.432 0.574 0.430 0.568 0.496 0.502 0.446 0.520 0.463
+
+AVG 0.285 0.257 0.307 0.265 0.335 0.289 0.330 0.282 0.354 0.284 0.412 0.338 0.340 0.290 0.366 0.314
+
+2023), and DLinear (Zeng et al., 2023). Additionally, mod- els involving pre-training methods like TFT (Lim et al., 2021) are also evaluated. Our experimental setup comprises two window-horizon configurations: (L = 168, H = 24) and (L = 720, H = 360). We proceed evaluation with both of them for a future-known case, while for the future- agnostic case, since long-range prediction without future hint lacks real-world applicability, we focus exclusively on the short-term horizon (L = 168, H = 24).
+
+control for architectural degrees of freedom, we introduce PatchTST’ (Figure 6), which replaces the original token- to-window mapping with a standard MAE-style strategy to facilitate a more direct comparison. Given the inherent regression dependencies from auxiliary variates to the Ob- served Target (OT) in these benchmarks, we restrict our eval- uation to the endogenous variate alone. Following the long- lookback benefits of Transformers, we set the look-back window to L = 672 for horizons H ∈{96, 192, 336, 720}.
+
+Table 1 and 2 present our evaluation results on this bench- mark, demonstrating the state-of-the-art performance of DiTS, marked by substantial improvements exceeding 10% across multiple subsets and overall averaged metrics. No- tably, the model achieves a significant performance gain in the 360-step horizon configuration. This substantial lead in a typically challenging real-world scenario is closely at- tributed to the information provided by known exogenous variates. Within this framework, the explicit covariate re- gression module in DiTS effectively prevents the prediction results from deviating significantly toward uncertainty.
+
+Figure 6. Comparison of DiTS, PatchTST, and PatchTST. The architectures differ in their token processing strategies: noising for DiTS, masking for PatchTST’, and flattening for the original one.
+
+Figure 7 demonstrates that DiTS maintains a robust lead over comparable advanced architectures, delivering uniform outperformance in mean results across four settings. While the contrast with PatchTST highlights a systemic edge de- rived from the ViT-like backbone, the comparison with PatchTST’ serves to isolate and validate the novel impli- cations of the flow matching paradigm, proving its efficacy as a potent new framework for time series forecasting.
+
+While DiTS adapts the MM-DiT to the characteristics of time series, the design space afforded by both Transformer variants and Diffusion models necessitates a rigorous inves- tigation. This section discusses the capability of DiTS on modeling endogenous temporal dynamics with the CFM framework, then dissects potential architectural choices re- garding attention mechanisms and conditioning paradigms, establishing the superiority of our proposed design while discussing the trade-offs between deterministic and proba- bilistic forecasting. Full results can be seen in Appendix D.
+
+DiTS PatchTST' PatchTST
+
+Endogenous Variate Forecasting To thoroughly validate the efficacy of DiTS as a foundational backbone, we extend our evaluation to univariate long-term forecasting across six public benchmarks (Wang et al., 2024a), where the Weather dataset is excluded due to wrong values. We adopt PatchTST (Nie et al., 2023), a leading model in univari- ate forecasting, as our primary baseline. Furthermore, to
+
+ETTh1 ETTh2 ETTm1 ETTm2 ECL Traffic AVG 0.0
+
+Figure 7. Univariate long-term forecasting MSE comparison. Com- parison between DiTS and PatchTST across six public benchmarks. DiTS consistently achieves lower MSE in all settings.
+
+Attention Mechanism To assess the impact of architec- tural choices, we ablate four widely-adopted attention mech- anisms for covariate-aware forecasting within the DiTS. These include the Timer-XL-style, which flattens all variate tokens; the iTransformer-style, where both endogenous and exogenous variates are treated as variate tokens; and the Prefix- and TimeXer-styles, which integrate covariates into joint or cross-attention mechanisms as variate tokens, as illustrated in Figure 7. Experiments are conducted on the EPF dataset using the (L = 168, H = 24) configuration.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+AdaLN layers (AdaLN.). Experiments are performed on the EPF dataset under the (L = 168, H = 24) configuration.
+
+DiTS (Ours) Joint. Cross. AdaLN.
+
+Joint Attn Joint Attn
+
+Figure 10. Candidate condition injection paradigms. Architectural diagrams illustrating Joint attention, Cross-attention, AdaLN, and the proposed DiTS approach for condition integration.
+
+The results, presented in Figure 11, underscore the im- portance of the MM-DiT-style approach, which concur- rently leverages both joint attention and AdaLN to reinforce covariate-awareness and structural synergy.
+
+DiTS Joint. Cross. AdaLN.
+
+Figure 8. Illustrations of attention mechanisms. Different strate- gies for integrating endogenous and exogenous variate tokens, including Timer-XL, Prefix, TimeXer, and iTransformer styles.
+
+NP PJM BE FR DE AVG 0.0
+
+The results, presented in Figure 9, not only justify the de- sign of DiTS but also highlight the potential performance bottlenecks incurred by coarse-grained tokenization of vari- ates. While performance varies slightly across sub-datasets depending on the configuration, DiTS demonstrates overall structural superiority across all evaluated benchmarks.
+
+Figure 11. Performance comparison of condition control methods. Evaluation on the EPF dataset shows that the DiTS paradigm (Joint + AdaLN) provides the best structural synergy.
+
+Through ablation studies, we confirm the structural effec- tiveness of DiTS. By providing native support for both inter-variate and intra-variate dependencies modeling, DiTS serves as a robust blueprint for the generic adaptation of gen- erative models’ architectures to covariate-aware forecasting.
+
+DiTS TimeXer. Prefix. Timer-XL. iTransformer.
+
+NP PJM BE FR DE AVG 0.00
+
+In this paper, we introduced DiTS, a Multimodal Diffu- sion Transformer framework that leverages flow matching for high-dimensional covariate-aware time series forecast- ing. By employing a dual-stream MM-DiT architecture, DiTS addresses the critical gap in fine-grained conditional control, providing superior synergy between heterogeneous covariates and target variates compared to existing models limited by simple AdaLN conditioning. Our results demon- strate that the DiTS backbone exhibits exceptional scal- ing properties in the temporal domain, effectively bridging the gap between low-rank variate modeling and long-range temporal extrapolation. Ultimately, DiTS establishes the Diffusion Transformer as a robust, foundational architec- ture for time series, paving the way for the development of general-purpose Time Series Foundation Models capable of large-scale generative forecasting across diverse domains.
+
+Figure 9. Impact of attention mechanisms on performance. MSE comparison of the five attention architectures on the EPF dataset.
+
+Condition Control We conduct an ablation study to inves- tigate the optimal conditioning mechanism for integrating exogenous variates c and diffusion timesteps t within the DiTS framework. Inspired by Peebles & Xie (2023), we explore three alternative injection paradigms as illustrated in Figure 10: incorporating both components via joint atten- tion (Joint.), cross-attention (Cross.), or exclusively through
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Das, A., Kong, W., Sen, R., and Zhou, Y. A decoder- only foundation model for time-series forecasting. arXiv preprint arXiv:2310.10688, 2023b.
+
+This work introduces DiTS, a generative forecaster that en- hances the accuracy and reliability of time series forecasting through Multimodal Diffusion Transformers. By effectively integrating high-dimensional exogenous factors, our model contributes to improved decision-making and resource effi- ciency in critical sectors such as smart grids, supply chain logistics, and environmental monitoring. While th proba- bilistic outputs of DiTS facilitate better uncertainty quan- tification, we recognize the inherent risks of deep learning models, including the potential for historical bias propa- gation and the misinterpretation of generative samples as certainty. To mitigate these risks, we advocate for the de- ployment of DiTS within human-in-the-loop systems and emphasize the importance of domain-specific validation.
+
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929, 2020.
+
+Esser, P., Kulal, S., Blattmann, A., Entezari, R., M¨uller, J., Saini, H., Levi, Y., Lorenz, D., Sauer, A., Boesel, F., et al. Scaling rectified flow transformers for high-resolution image synthesis. In Forty-first international conference on machine learning, 2024.
+
+Feng, S., Miao, C., Zhang, Z., and Zhao, P. Latent diffusion transformer for probabilistic time series forecasting. In Proceedings of the AAAI Conference on Artificial Intelli- gence, volume 38, pp. 11979–11987, 2024.
+
+Alcaraz, J. M. L. and Strodthoff, N. Diffusion-based time series imputation and forecasting with structured state space models. arXiv preprint arXiv:2208.09399, 2022.
+
+Hoo, S. B., M¨uller, S., Salinas, D., and Hutter, F. From tables to time: How tabpfn-v2 outperforms special- ized time series forecasting models. arXiv preprint arXiv:2501.02945, 2025.
+
+Ansari, A. F., Stella, L., Turkmen, C., Zhang, X., Mercado, P., Shen, H., Shchur, O., Rangapuram, S. S., Arango, S. P., Kapoor, S., et al. Chronos: Learning the language of time series. arXiv preprint arXiv:2403.07815, 2024.
+
+Hyndman, R. J. and Khandakar, Y. Automatic time se- ries forecasting: the forecast package for r. Journal of statistical software, 27:1–22, 2008.
+
+Ansari, A. F., Shchur, O., K¨uken, J., Auer, A., Han, B., Mercado, P., Rangapuram, S. S., Shen, H., Stella, L., Zhang, X., et al. Chronos-2: From univariate to universal forecasting. arXiv preprint arXiv:2510.15821, 2025.
+
+Lago, J., Marcjasz, G., De Schutter, B., and Weron, R. Forecasting day-ahead electricity prices: A review of state-of-the-art algorithms, best practices and an open- access benchmark. Applied Energy, 293:116983, 2021.
+
+Auer, A., Podest, P., Klotz, D., B¨ock, S., Klambauer, G., and Hochreiter, S. Tirex: Zero-shot forecasting across long and short horizons with enhanced in-context learning. arXiv preprint arXiv:2505.23719, 2025.
+
+Langley, P. Crafting papers on machine learning. In Langley, P. (ed.), Proceedings of the 17th International Conference on Machine Learning (ICML 2000), pp. 1207–1216, Stan- ford, CA, 2000. Morgan Kaufmann.
+
+Cao, D., Ye, W., Zhang, Y., and Liu, Y. Timedit: General- purpose diffusion transformers for time series foundation model. arXiv preprint arXiv:2409.02322, 2024.
+
+Li, S., Jin, X., Xuan, Y., Zhou, X., Chen, W., Wang, Y.- X., and Yan, X. Enhancing the locality and breaking the memory bottleneck of transformer on time series forecast- ing, 2020. URL https://arxiv.org/abs/1907. 00235.
+
+Chen, J., Yu, J., Ge, C., Yao, L., Xie, E., Wu, Y., Wang, Z., Kwok, J., Luo, P., Lu, H., et al. Pixart-alpha: Fast training of diffusion transformer for photorealistic text- to-image synthesis. arXiv preprint arXiv:2310.00426, 2023.
+
+Li, T., Tian, Y., Li, H., Deng, M., and He, K. Autoregressive image generation without vector quantization. Advances in Neural Information Processing Systems, 37:56424– 56445, 2024.
+
+Cohen, B., Khwaja, E., Wang, K., Masson, C., Ram´e, E., Doubli, Y., and Abou-Amal, O. Toto: Time series op- timized transformer for observability. arXiv preprint arXiv:2407.07874, 2024.
+
+Lim, B., Arık, S. ¨O., Loeff, N., and Pfister, T. Temporal fusion transformers for interpretable multi-horizon time series forecasting. International journal of forecasting, 37(4):1748–1764, 2021.
+
+Das, A., Kong, W., Leach, A., Sen, R., and Yu, R. Long- term forecasting with tide: Time-series dense encoder. arXiv preprint arXiv:2304.08424, 2023a.
+
+Lipman, Y., Chen, R. T., Ben-Hamu, H., Nickel, M., and Le, M. Flow matching for generative modeling. arXiv preprint arXiv:2210.02747, 2022.
+
+Liu, C., Aksu, T., Liu, J., Liu, X., Yan, H., Pham, Q., Savarese, S., Sahoo, D., Xiong, C., and Li, J. Moirai 2.0: When less is more for time series forecasting. arXiv preprint arXiv:2511.11698, 2025a.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+probabilistic time series forecasting. In International conference on machine learning, pp. 8857–8868. PMLR, 2021.
+
+Shchur, O., Ansari, A. F., Turkmen, C., Stella, L., Erickson, N., Guerron, P., Bohlke-Schneider, M., and Wang, Y. fev- bench: A realistic benchmark for time series forecasting. arXiv preprint arXiv:2509.26468, 2025.
+
+Liu, X., Gong, C., and Liu, Q. Flow straight and fast: Learning to generate and transfer data with rectified flow. arXiv preprint arXiv:2209.03003, 2022a.
+
+Liu, Y., Wu, H., Wang, J., and Long, M. Non-stationary transformers: Exploring the stationarity in time series forecasting. Advances in Neural Information Processing Systems, 35:9881–9893, 2022b.
+
+Tashiro, Y., Song, J., Song, Y., and Ermon, S. Csdi: Con- ditional score-based diffusion models for probabilistic time series imputation. Advances in neural information processing systems, 34:24804–24816, 2021.
+
+Liu, Y., Hu, T., Zhang, H., Wu, H., Wang, S., Ma, L., and Long, M. itransformer: Inverted transformers are effective for time series forecasting. arXiv preprint arXiv:2310.06625, 2024a.
+
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., and Polosukhin, I. At- tention is all you need. Advances in neural information processing systems, 30, 2017.
+
+Liu, Y., Qin, G., Huang, X., Wang, J., and Long, M. Timer- xl: Long-context transformers for unified time series fore- casting. arXiv preprint arXiv:2410.04803, 2024b.
+
+Liu, Y., Qin, G., Shi, Z., Chen, Z., Yang, C., Huang, X., Wang, J., and Long, M. Sundial: A family of highly capable time series foundation models. arXiv preprint arXiv:2502.00816, 2025b.
+
+Wang, Y., Wu, H., Dong, J., Liu, Y., Wang, C., Long, M., and Wang, J. Deep time series models: A comprehensive survey and benchmark. arXiv preprint arXiv:2407.13278, 2024a.
+
+Wang, Y., Wu, H., Dong, J., Qin, G., Zhang, H., Liu, Y., Qiu, Y., Wang, J., and Long, M. Timexer: Empowering transformers for time series forecasting with exogenous variables. Advances in Neural Information Processing Systems, 37:469–498, 2024b.
+
+Nie, Y., Nguyen, N. H., Sinthong, P., and Kalagnanam, J. A time series is worth 64 words: Long-term forecasting with transformers. arXiv preprint arXiv:2211.14730, 2023.
+
+Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen, T., Lin, Z., Gimelshein, N., Antiga, L., Desmaison, A., K¨opf, A., Yang, E., DeVito, Z., Rai- son, M., Tejani, A., Chilamkurthy, S., Steiner, B., Fang, L., Bai, J., and Chintala, S. Pytorch: An imperative style, high-performance deep learning library. In NeurIPS, 2019.
+
+Wu, H., Hu, T., Liu, Y., Zhou, H., Wang, J., and Long, M. Timesnet: Temporal 2d-variation modeling for general time series analysis. arXiv preprint arXiv:2210.02186, 2023.
+
+Zeng, A., Chen, M., Zhang, L., and Xu, Q. Are transformers effective for time series forecasting? 2023.
+
+Peebles, W. and Xie, S. Scalable diffusion models with transformers. In Proceedings of the IEEE/CVF interna- tional conference on computer vision, pp. 4195–4205, 2023.
+
+Zhang, Y. and Yan, J. Crossformer: Transformer utilizing cross-dimension dependency for multivariate time series forecasting. In The Eleventh International Conference on Learning Representations, 2022.
+
+Qiu, X., Wu, X., Lin, Y., Guo, C., Hu, J., and Yang, B. Duet: Dual clustering enhanced multivariate time series forecasting. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1, pp. 1185–1196, 2025a.
+
+Zhou, H., Zhang, S., Peng, J., Zhang, S., Li, J., Xiong, H., and Zhang, W. Informer: Beyond efficient transformer for long sequence time-series forecasting. In Proceedings of the AAAI conference on artificial intelligence, volume 35, pp. 11106–11115, 2021.
+
+Qiu, X., Zhu, Y., Li, Z., Cheng, H., Wu, X., Guo, C., Yang, B., and Hu, J. Dag: A dual causal network for time series forecasting with exogenous variables. arXiv preprint arXiv:2509.14933, 2025b.
+
+Rasul, K., Seward, C., Schuster, I., and Vollgraf, R. Au- toregressive denoising diffusion models for multivariate
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+In this section, we provide detailed descriptions of the datasets utilized in Table 3 and Table 4. To comprehensively evaluate the performance of our model, we conduct experiments on a diverse collection of real-world datasets that encompass a subset of the FEV-Bench (Shchur et al., 2025), Electricity Price Forecasting (EPF) datasets, and standard long-term time series forecasting benchmarks (Wang et al., 2024a).
+
+To assess the efficacy of our method in leveraging exogenous variates—particularly within the context of probabilistic forecasting—we curated a specific subset from the FEV-Bench (Shchur et al., 2025). The selection process was rigorously guided by the following criteria to ensure the datasets align with our experimental requirements:
+
+A.1. FEV-Bench and Subset Selection
+
+• Availability of Exogenous Variates: Since a core contribution of our work lies in modeling the dependency between covariates and the target, we restricted our selection to datasets that explicitly include dynamic exogenous variates (covariates).
+
+• Univariate Target Structure: To focus on the fundamental performance of covariate-aware forecasting, we selected datasets characterized by a single endogenous target variate, excluding multivariate target scenarios.
+
+• Data Scale and Feasibility: We applied constraints on dataset size to balance statistical validity with computational efficiency. Specifically, we excluded datasets with insufficient temporal spans to guarantee robust training and evaluation splits. Conversely, we also omitted extremely large-scale datasets to avoid prohibitive training overhead, ensuring that the experimental workflow remains computationally manageable.
+
+A.2. Electricity Price Forecasting Datasets
+
+Complementing our analysis on the FEV-Bench subset, we extend our deterministic evaluation to the Electricity Price Forecasting (EPF) datasets (Lago et al., 2021). This collection encompasses data from five distinct day-ahead electricity markets, each spanning a six-year period. A distinguishing feature of these datasets is that the exogenous variates are derived from reliable external forecasts (e.g., grid load or wind power predictions) rather than historical observations, thereby strictly adhering to a realistic day-ahead forecasting scenario.
+
+Specifically, the datasets include: (1) NP (Nord Pool), which covers the Nord Pool market from 2013-01-01 to 2018-12-24, recording hourly electricity prices alongside corresponding grid load and wind power forecasts. (2) PJM (Pennsylvania-New Jersey-Maryland), spanning the same period (2013-01-01 to 2018-12-24). It comprises zonal electricity prices in the Commonwealth Edison (COMED) zone, together with system load and COMED load forecasts. (3) BE (Belgium), which records data from the Belgian electricity market from 2011-01-09 to 2016-12-31, containing hourly electricity prices, load forecasts for Belgium, and generation forecasts from neighboring France. (4) FR (France), covering the French electricity market from 2012-01-09 to 2017-12-31, consisting of hourly prices accompanied by load and generation forecasts. (5) DE (Germany), which represents the German electricity market from 2012-01-09 to 2017-12-31, recording hourly prices, zonal load forecasts for the TSO Amprion zone, as well as wind and solar generation forecasts.
+
+A.3. Long-term Forecasting Benchmarks
+
+Complementing the covariate-based experiments, we evaluated the model’s performance relying solely on the endogenous target variate. This setting serves two primary objectives: (1) to assess the model’s intrinsic capability in capturing temporal dynamics, (2) to facilitate a direct comparison with structurally analogous state-of-the-art models, particularly PatchTST (Nie et al., 2023).
+
+We utilized standard Long-term Time Series Forecasting (LTSF) benchmarks, adapting the selection strategy for univariate targets: (1) ETT (Zhou et al., 2021), where we explicitly isolated the Oil Temperature (OT) variate from all four subsets (ETTh1, ETTh2, ETTm1, ETTm2) due to its high predictability. (2) ECL (Li et al., 2020) and (3) Traffic (Wu et al., 2023), where we selected the last client (Client 321) and the last sensor (Sensor 862) as the single target variates, respectively. Notably, the Weather dataset was excluded from this specific evaluation due to the presence of significant anomalies (outliers) in the target sequence.
+
+Table 3. Summary of the Electricity Price Forecasting (EPF) and Long-term Time Series Forecasting benchmark datasets. The dataset size is reported as (Train, Validation, Test) samples.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Dataset Freq. Target Variate Size (Train, Val, Test)
+
+NP Hourly Electricity Price (36500, 5219, 10460) PJM Hourly Electricity Price (36500, 5219, 10460) BE Hourly Electricity Price (36500, 5219, 10460) FR Hourly Electricity Price (36500, 5219, 10460) DE Hourly Electricity Price (36500, 5219, 10460)
+
+ETTh1 Hourly Oil Temperature (8545, 2881, 2881) ETTh2 Hourly Oil Temperature (8545, 2881, 2881) ETTm1 15 min Oil Temperature (34465, 11521, 11521) ETTm2 15 min Oil Temperature (34465, 11521, 11521) ECL Hourly Electricity Cons. (18317, 2633, 5261) Traffic Hourly Road Occupancy (12185, 1757, 3509)
+
+Table 4. Summary of the subset selected from the FEV-Bench (Shchur et al., 2025). The table details the frequency, prediction horizon (H), look-back window length (W), median time-series length, number of series, and number of exogenous variates (covering both past-only and known-future types).
+
+Dataset Freq. H W Median Length # Ser. # Exog.
+
+ENTSO-e Load 15min 96 20 175,292 6 3 ENTSO-e Load 30min 96 20 87,645 6 3 ENTSO-e Load Hourly 168 20 43,822 6 3 GFC12 Hourly 168 10 39,414 11 1 GFC14 Hourly 168 20 17,520 1 1 GFC17 Hourly 168 20 17,544 8 1 Solar with Weather 15min 96 20 198,600 1 9 Solar with Weather Hourly 24 20 49,648 1 9
+
+Our model is implemented using PyTorch (Paszke et al., 2019), and all experiments are conducted on a single NVIDIA RTX 4090 GPU (24GB).
+
+B. Implementation Details
+
+B.1. Flow Matching Configuration
+
+Based on the ablation studies presented in Appendix C.1, we adopt the optimal configuration for the flow matching backbone. For the sampling schedule, we employ the Log-Normal as a noise scheduler with a sampling step size of 5. This configuration strikes a balance between computational efficiency and quality of generation. Furthermore, we utilize the v-prediction parameterization and optimize the model using the conditional flow matching v-loss.
+
+B.2. Hyperparameter Settings
+
+We tailor the hyperparameter search space to different experimental benchmarks, ensuring optimal performance.
+
+EPF Dataset. For the EPF dataset experiments, we performed a grid search to identify the best configurations. The search space included learning rates in {1 × 10−4, 3 × 10−4, 1 × 10−3}, model dimensions dmodel ∈{256, 512}, and encoder layers elayers ∈{3, 4}. The batch size was fixed at 32, and the patch length was set to 24. The feed-forward dimension dff was consistently set to 4 × dmodel.
+
+FEV-Bench Subset. For the evaluation on the FEV-Bench subset, we maintained a fixed model dimension dmodel = 512 and a patch length of 24 across all datasets. The dataset-specific hyperparameters—including batch size, feed-forward dimension (dff), learning rate, and the number of encoder layers (elayers)—are detailed in Table 5.
+
+Table 5. Hyperparameter settings for the 8 datasets in the fev-bench subset. L denotes the lookback length. Note that dmodel = 512 and patch length is 24 for all datasets.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+ENTSO-E Load 15min 720 128 2048 3e-4 4 ENTSO-E Load Hourly 720 64 2048 1e-4 3 ENTSO-E Load 30min 720 128 1536 3e-4 3 GFC 12 Hourly 720 128 1536 3e-4 3 GFC 14 Hourly 720 64 2048 3e-4 4 GFC 17 Hourly 720 64 2048 3e-4 4 Solar with Weather 15min 720 128 1536 3e-4 3 Solar with Weather Hourly 336 64 2048 3e-4 3
+
+Dataset Freq. Lookback (L) Batch Size dff LR elayers
+
+Endogenous Variate Forecasting. In the endogenous variate forecasting tasks, we aligned our model architecture with leading baselines, PatchTST and its variant PatchTST’, to ensure a fair comparison. Specifically, we fixed the encoder layers elayers = 3, model dimension dmodel = 512, feed-forward dimension dff = 1536. The batch size was fixed at 32, and the patch length was set to 12. The learning rate was tuned via grid search within {1 × 10−4, 5 × 10−4, 1 × 10−3}.
+
+C. Additional Analysis
+
+C.1. Schedule and Inference Steps
+
+The probabilistic forecasting capability of DiTS is fundamentally governed by key components of the flow matching framework, specifically the noise scheduling strategy during training and the number of inference steps during sampling. We evaluated these effects on the EPF dataset under the (L = 168, H = 24) configuration, comparing three prominent strategies: Cosine, Linear, and Log-Normal. Given that our evaluation encompasses both deterministic and uncertainty-aware perspectives, we recorded both MSE and CRPS to analyze the impact of inference steps.
+
+(a) Metrics Comparison
+
+(b) lognorm Metric Stability
+
+Cosine Linear Log-Normal
+
+MSE (Left) CRPS (Right)
+
+MSE CRPS Inference Metrics
+
+1 2 3 4 5 6 8 10 15 20 25 30 40 50 Inference Steps
+
+Figure 12. Analysis of noise schedules and inference steps. (a) Comparison of Cosine, Linear, and Log-Normal Scheduling. (b) Trajectory of metrics across increasing inference steps.
+
+The empirical findings in Figure 12 reveal several critical insights. During the training phase, the Log-Normal strategy outperforms others in covariate-aware forecasting tasks, as it more effectively characterizes the denoising trajectory during the critical intermediate stages of the flow. Intriguingly, the two metrics demonstrate divergent trajectories as the number of inference steps increases. Attributed to the characteristically low information density inherent in time series data, DiTS achieves its performance peak with relatively few steps under both evaluation paradigms. However, as the sampling budget expands, the MSE increases while the CRPS remains relatively stable. This phenomenon highlights a potential metric misalignment in existing evaluation frameworks, suggesting that traditional deterministic metrics like MSE may fail to accurately assess the fidelity of probabilistic results as the inference process scales.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+D.1. Forecasting with Exogenous Covariates
+
+In this section, we provide detailed results of forecasting with exogenous covariates on two benchmarks: the EPF dataset (Wang et al., 2024b) and the subset of FEV-Bench (Shchur et al., 2025).
+
+Experimental Setup and Protocols. The evaluation on the EPF dataset covers both short-term and long-term horizons to test robustness. For the short-term horizon (L = 168, H = 24), we examine performance under two conditions: with future (where future covariates are known) and without future (where future covariates are unavailable). For the long-term horizon (L = 720, H = 360), experiments are restricted to the with future setting; the without future condition is excluded for this horizon, as forecasting 360 steps without future guidance entails excessive uncertainty and is practically infeasible. The quantitative results comparing our model against baselines under these settings are detailed in Table 7 and Table 2. All implementation details follow the configurations outlined in Section B.
+
+For the FEV-Bench subset, we adhere to the standard leaderboard protocols (Shchur et al., 2025). To ensure a fair comparison and address data leakage issues prevalent in certain baselines, we employ a standardized imputation strategy: missing or invalid entries in the baseline results are substituted with predictions from the Chronos-bolt model. This approach maintains strict consistency with the official evaluation criteria of the benchmark. The corresponding evaluation results are presented in Table 6. All implementation details align with the descriptions in Section B.
+
+D.2. Forecasting with Endogenous variate
+
+As summarized in Table 8, our model demonstrates competitive performance across various datasets. The experimental configurations remain consistent with the implementation details provided in Section B.
+
+In this section, we present the forecasting results utilizing only endogenous variates on standard Long-term Time Series Forecasting benchmarks (Wang et al., 2024a).
+
+As discussed in Section 4.2, the choice of attention mechanism is crucial for capturing the dependencies between different variates. Table 9 presents the full results comparing DiTS’s diffusion-based attention with several state-of-the-art attention variants used in time series forecasting, such as TimeXer and iTransformer.
+
+D.3. Detailed Analysis of Attention Mechanisms
+
+Our results indicate that DiTS consistently achieves the best or second-best performance across most datasets (NP, PJM, BE, and DE). Notably, while TimeXer performs competitively on the FR dataset, DiTS maintains a superior average performance (AVG). This demonstrates that our attention design is more robust to the diverse distribution shifts present in multi-region energy datasets compared to standard or prefix-based attention mechanisms.
+
+D.4. Impact of Conditioning Strategies
+
+The effectiveness of exogenous information injection is another core component of our model. Table 10 compares our default conditioning strategy with Cross-Attention, Joint-Concatenation, and AdaLN variants.
+
+The full results show that while the Joint strategy achieves strong performance on the BE dataset, our proposed conditioning method in DiTS provides the most balanced results, leading to the lowest average error. In particular, DiTS shows a significant advantage on the DE dataset and NP dataset. The AdaLN approach, although effective in some generative tasks, shows higher variance in forecasting accuracy, particularly on the NP and DE datasets. These observations reinforce the conclusion that DiTS effectively balances global context and local exogenous signals.
+
+Figures 13–15 visualize representative forecast examples from the EPF dataset (Wang et al., 2024b) and the fev-bench subset (Shchur et al., 2025). To quantify uncertainty, we generate an ensemble of stochastic predictions with varying initial noise to estimate the mean value and the 80% prediction interval. Specifically, we generate 10 predictions for the EPF datasets and 50 predictions for the fev-bench subset. Regarding exogenous inputs, known-future covariates are plotted across the entire forecast horizon, whereas past-only covariates are visualized strictly within the historical window.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Table 6. Probabilistic forecasting performance comparison on the FEV leaderboard subset. We report detailed results for Scaled Quantile Loss (SQL), Weighted Quantile Loss (WQL), Mean Absolute Scaled Error (MASE), and Weighted Absolute Percentage Error (WAPE); for all metrics, lower values indicate better performance. The best results are in bold, and the second-best are underlined. Baseline results are partially sourced from FEV-Bench (Shchur et al., 2025). The symbol “/” denotes data leakage; in such instances, we substitute the missing values with results from Chronos-bolt for calculating averages, following the official evaluation protocol.
+
+Dataset Freq Metric Models
+
+SQL 0.431 0.454 0.469 0.471 0.591 0.484 0.478 0.667 MASE 0.533 0.585 0.599 0.590 0.750 0.609 0.593 0.758 WAPE 0.040 0.042 0.042 0.042 0.052 0.043 0.042 0.056 WQL 0.032 0.033 0.034 0.033 0.041 0.034 0.034 0.050
+
+DiTS Chronos2 TiRex TimesFM 2.5 Toto TabPFN-TS Moirai 2.0 Sundial-base
+
+SQL 0.468 0.429 0.470 0.468 0.480 0.442 0.487 0.744 MASE 0.527 0.538 0.585 0.585 0.591 0.538 0.592 0.812 WAPE 0.035 0.033 0.036 0.036 0.037 0.033 0.040 0.055 WQL 0.031 0.026 0.029 0.029 0.030 0.027 0.033 0.051
+
+SQL 0.423 0.434 0.523 0.566 0.496 0.512 0.488 0.722 MASE 0.501 0.544 0.665 0.696 0.625 0.635 0.597 0.780 WAPE 0.034 0.037 0.040 0.047 0.038 0.039 0.038 0.052 WQL 0.028 0.029 0.031 0.039 0.030 0.032 0.032 0.049
+
+SQL 0.632 0.649 0.908 / / 0.834 / / MASE 0.717 0.812 1.124 / / 1.034 / / WAPE 0.059 0.070 0.095 / / 0.088 / / WQL 0.052 0.056 0.077 / / 0.070 / /
+
+SQL 0.415 0.430 0.721 / / 0.515 / / MASE 0.466 0.539 0.912 / / 0.641 / / WAPE 0.023 0.026 0.045 / / 0.031 / / WQL 0.020 0.021 0.035 / / 0.025 / /
+
+SQL 0.535 0.485 0.889 / / 0.672 / / MASE 0.570 0.610 1.138 / / 0.855 / / WAPE 0.037 0.040 0.076 / / 0.056 / / WQL 0.035 0.032 0.060 / / 0.044 / /
+
+Solar with Weather 15T
+
+SQL 0.649 0.677 0.846 0.906 0.784 0.747 0.839 0.963 MASE 0.779 0.864 1.049 1.115 0.940 0.944 1.076 1.118 WAPE 0.936 1.152 1.424 1.470 1.148 1.166 1.376 1.506 WQL 0.831 0.955 1.207 1.240 1.000 0.971 1.120 1.351
+
+Solar with Weather 1H
+
+SQL 0.674 0.767 0.900 0.815 0.876 0.701 0.907 1.182 MASE 0.820 1.020 1.158 1.051 1.059 0.863 1.136 1.303 WAPE 0.819 1.258 1.526 1.201 1.407 0.910 1.483 1.448 WQL 0.694 0.978 1.250 0.970 1.219 0.796 1.229 1.360
+
+SQL 0.519 0.527 0.690 0.701 0.705 0.599 0.696 0.844 MASE 0.601 0.669 0.871 0.864 0.861 0.746 0.854 0.968 WAPE 0.081 0.093 0.120 0.118 0.117 0.099 0.119 0.135 WQL 0.070 0.074 0.097 0.097 0.097 0.081 0.098 0.119
+
+SQL 1.50 1.88 6.00 5.31 5.31 3.38 5.81 7.44 MASE 1.00 2.25 6.00 5.06 5.06 3.50 5.35 7.19 WAPE 1.25 2.50 4.75 5.31 5.44 3.50 5.69 6.94 WQL 1.75 2.00 5.69 5.69 5.69 3.25 6.06 7.44
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Table 7. Deterministic forecasting performance on the EPF dataset with known future covariates. A lower Mean Absolute Error (MAE) or Mean Squared Error (MSE) indicates a better prediction. The best results are in bold, and the second-best results are underlined. Results of partial baseline models are reported by (Qiu et al., 2025b).
+
+Models DiTS TimeXer TFT TiDE DUET DAG iTransformer Crossformer Metrics MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+24 0.158 0.206 0.181 0.229 0.219 0.249 0.284 0.301 0.246 0.287 0.202 0.237 0.192 0.250 0.196 0.241 360 0.384 0.395 0.568 0.482 0.539 0.501 0.601 0.498 0.576 0.528 0.521 0.451 0.516 0.496 0.404 0.406
+
+AVG 0.271 0.301 0.375 0.355 0.379 0.375 0.443 0.400 0.411 0.408 0.362 0.344 0.354 0.373 0.300 0.323
+
+AVG 0.082 0.174 0.124 0.225 0.114 0.207 0.142 0.246 0.102 0.197 0.093 0.180 0.098 0.197 0.119 0.212
+
+24 0.057 0.143 0.079 0.175 0.095 0.195 0.106 0.214 0.072 0.166 0.057 0.143 0.075 0.164 0.087 0.188 360 0.107 0.204 0.170 0.275 0.133 0.219 0.177 0.279 0.131 0.228 0.130 0.218 0.120 0.231 0.152 0.236
+
+AVG 0.376 0.266 0.432 0.279 0.454 0.291 0.498 0.325 0.515 0.354 0.423 0.279 0.513 0.345 0.403 0.268
+
+24 0.335 0.238 0.377 0.237 0.426 0.272 0.426 0.285 0.432 0.272 0.361 0.229 0.343 0.250 0.345 0.228 360 0.418 0.293 0.486 0.322 0.482 0.310 0.571 0.364 0.597 0.436 0.485 0.330 0.684 0.441 0.461 0.308
+
+AVG 0.360 0.218 0.415 0.230 0.504 0.257 0.484 0.281 0.496 0.327 0.414 0.219 0.484 0.261 0.412 0.232
+
+24 0.273 0.175 0.359 0.193 0.543 0.253 0.418 0.255 0.384 0.251 0.355 0.171 0.369 0.203 0.367 0.194 360 0.447 0.261 0.471 0.267 0.465 0.261 0.551 0.308 0.607 0.403 0.473 0.268 0.599 0.319 0.457 0.270
+
+24 0.213 0.288 0.287 0.328 0.380 0.383 0.367 0.383 0.376 0.378 0.277 0.322 0.261 0.325 0.268 0.323 360 0.346 0.356 0.526 0.453 0.599 0.509 0.630 0.511 0.589 0.482 0.462 0.418 0.555 0.488 0.444 0.430
+
+AVG 0.279 0.322 0.406 0.391 0.489 0.446 0.499 0.447 0.482 0.430 0.370 0.370 0.408 0.407 0.356 0.376
+
+Table 8. Long-term forecasting(endogenous-only) results on datasets (Wu et al., 2023). We compare our model DiTS with PatchTST and its variant PatchTST’. A lower Mean Absolute Error (MAE) or Mean Squared Error (MSE) indicates a better prediction. The best results are in bold, and the second-best are underlined. Lookback length L = 672, patch size P = 12.
+
+Dataset Model 96 192 336 720 AVG MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+DiTS 0.065 0.198 0.086 0.233 0.080 0.227 0.120 0.280 0.088 0.235 PatchTST 0.080 0.218 0.078 0.220 0.081 0.225 0.107 0.261 0.086 0.231 PatchTST’ 0.068 0.201 0.097 0.247 0.080 0.225 0.098 0.247 0.086 0.230
+
+DiTS 0.143 0.295 0.194 0.352 0.203 0.360 0.271 0.411 0.203 0.354 PatchTST 0.176 0.330 0.216 0.372 0.199 0.360 0.252 0.404 0.211 0.366 PatchTST’ 0.197 0.361 0.225 0.388 0.232 0.394 0.245 0.402 0.225 0.386
+
+DiTS 0.030 0.132 0.046 0.170 0.057 0.186 0.077 0.218 0.052 0.177 PatchTST 0.035 0.144 0.044 0.161 0.055 0.182 0.083 0.225 0.054 0.178 PatchTST’ 0.031 0.137 0.042 0.160 0.056 0.184 0.074 0.212 0.051 0.173
+
+DiTS 0.070 0.197 0.109 0.253 0.136 0.287 0.182 0.334 0.124 0.268 PatchTST 0.084 0.222 0.119 0.269 0.132 0.282 0.188 0.347 0.131 0.280 PatchTST’ 0.148 0.301 0.172 0.325 0.194 0.349 0.233 0.388 0.187 0.341
+
+DiTS 0.236 0.333 0.271 0.362 0.312 0.395 0.431 0.470 0.313 0.390 PatchTST 0.299 0.393 0.353 0.434 0.452 0.477 0.660 0.611 0.441 0.479 PatchTST’ 0.817 0.717 0.896 0.745 0.934 0.771 1.007 0.791 0.914 0.756
+
+DiTS 0.111 0.173 0.116 0.185 0.117 0.195 0.146 0.228 0.122 0.195 PatchTST 0.138 0.225 0.147 0.240 0.149 0.244 0.170 0.267 0.151 0.244 PatchTST’ 1.691 1.095 1.719 1.107 1.752 1.127 1.760 1.144 1.730 1.118
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Table 9. Full results of the ablation study on attention mechanisms. We compare DiTS with various attention-based variants across five datasets. Bold and underlined indicate the best and second-best performance, respectively.
+
+Model NP PJM BE FR DE AVG MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+DiTS 0.158 0.206 0.057 0.143 0.335 0.238 0.273 0.175 0.213 0.288 0.207 0.210 TimeXer. 0.160 0.205 0.059 0.145 0.328 0.238 0.264 0.180 0.233 0.302 0.209 0.214 Prefix. 0.165 0.213 0.056 0.143 0.329 0.236 0.272 0.175 0.237 0.305 0.212 0.214 Timer-XL. 0.170 0.214 0.057 0.141 0.333 0.239 0.290 0.176 0.230 0.300 0.216 0.214 iTransformer. 0.183 0.229 0.060 0.147 0.360 0.252 0.341 0.191 0.248 0.316 0.239 0.227
+
+Table 10. Full results of the ablation study on conditioning strategies. We evaluate different ways to incorporate exogenous information.
+
+Bold and underlined indicate the best and second-best performance.
+
+Model NP PJM BE FR DE AVG MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE MSE MAE
+
+DiTS 0.158 0.206 0.057 0.143 0.335 0.238 0.273 0.175 0.213 0.288 0.207 0.210 Cross. 0.179 0.218 0.060 0.150 0.354 0.246 0.311 0.196 0.270 0.327 0.235 0.227 Joint. 0.186 0.225 0.074 0.161 0.334 0.230 0.305 0.188 0.242 0.310 0.228 0.223 AdaLN. 0.206 0.240 0.056 0.141 0.347 0.244 0.275 0.176 0.301 0.329 0.245 0.223
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Figure 13. Showcases of predictions from DiTS on the EPF datasets (Wang et al., 2024b).
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Figure 14. Showcases of predictions from DiTS on the FEV-Bench (Shchur et al., 2025) subset. Known-future exogenous variates are plotted in the forecast horizon, while past-only exogenous variates are omitted in the future horizon.
+
+DiTS: Multimodal Diffusion Transformers Are Time Series Forecasters
+
+Figure 15. Showcases of predictions from DiTS on the FEV-Bench (Shchur et al., 2025) subset. Known-future exogenous variates are plotted in the forecast horizon, while past-only exogenous variates are omitted in the future horizon.

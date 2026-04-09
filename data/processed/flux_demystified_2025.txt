@@ -1,0 +1,273 @@
+Demystifying Flux Architecture
+
+1Hebrew University of Jerusalem, Israel 2General Motors R&D, SDVR
+
+arXiv:2507.09595v1  [cs.CV]  13 Jul 2025
+
+Figure 1: Teaser image.
+
+FLUX.1 is a diffusion-based text-to-image generation model developed by Black Forest Labs, designed to achieve faithful text-image alignment while maintaining high image quality and diversity. FLUX is considered state-of-the-art in text-to-image generation, outperforming popular models such as Midjour- ney, DALL·E 3, Stable Diffusion 3 (SD3), and SDXL. Although publicly available as open source, the authors have not released official technical documentation detailing the model’s architecture or training setup. This report summarizes an extensive reverse-engineering effort aimed at demystifying FLUX’s architecture directly from its source code, to support its adoption as a backbone for future research and development. This document is an unofficial technical report and is not published or endorsed by the original developers or their affiliated institutions.
+
+1 Background 3 1.1 ML-Based Image Generation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3 1.2 Diffusion Models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3 1.3 Stable Diffusion . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3 1.4 Rectified Flows . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4 1.5 Transformers . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+
+2 FLUX.1 5 2.1 Introduction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5 2.2 FLUX.1 Sampling Pipeline . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5 2.2.1 Initiation and Pre-processing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7 2.2.2 Iterative Refinement and Post-processing . . . . . . . . . . . . . . . . . . . . . . . . . 8 2.3 Transformer . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9 2.3.1 Per-Iteration Pre-process . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9 2.3.2 Double-Stream Transformer Block . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 2.3.3 Single-Stream Transformer Block . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+
+3 Models and Tools 13 3.1 text-to-image . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13 3.2 tools . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+
+A Qualitative Evaluation 17
+
+To better understand the foundations of FLUX, we briefly present several key models and methods that preceded it and influenced its design. This overview is intentionally high-level, aiming only to provide the essential background necessary to grasp the core principles behind FLUX. For readers interested in a deeper exploration of these foundational works, references to the original papers and technical reports are provided throughout this section.
+
+1.1 ML-Based Image Generation
+
+The task of ML-based image generation refers to a family of models designed to generate novel samples from a simple distribution that emulates a source dataset. Specifically, some models learn to map a dataset of images to a simple distribution (e.g., Gaussian), from which new images can be sampled. Several types of generative models have been developed in recent years, including—but not limited to—Variational Autoencoders (VAEs) [1], Generative Adversarial Networks (GANs) [2], Normalizing Flows (NFs) [3], and Diffusion Models (DMs) [4]. Among these, text-to-image models (e.g., DALL·E [5], Stable Diffusion [6], FLUX [7]) have achieved state-of-the-art performance and are widely used in applications that generate high-quality images from textual instructions, commonly referred to as “prompts.”
+
+Within this scope, Diffusion Models (DMs) [4] have recently emerged as the state-of-the-art (SoTA) approach for text-conditioned image generation. They work by learning to reverse a gradual noising process applied to training data. While early diffusion models relied on U-Net architectures composed of convolutional layers augmented with attention mechanisms for image–text alignment, recent models such as SD3 [8] and FLUX.1 [7] have transitioned to fully Transformer-based architectures for the denoising process, offering improved scalability and context modeling. During the training process, clean images are incrementally corrupted by Gaussian noise whose magnitude is determined by a timestep-specific schedule, and the model learns to iteratively denoise them. In the most common version of DM optimization, the model is trained to predict the normalized added noise ϵ, and optimized using a reconstruction loss as formulated in Equation (1)
+
+Lϵ = Ext,ϵ,t  ∥ϵθ(xt, t) −ϵ∥2 (1)
+
+At inference time, the model begins from pure Gaussian noise and iteratively denoises it to produce realistic images. Unlike earlier generative models such as GANs, which rely on adversarial training, diffusion models optimize a reconstruction-based objective. This leads to more stable training and superior output quality, particularly for high-resolution image synthesis. Moreover, they offer fine-grained control over the generation process, enabling powerful applications such as super-resolution, inpainting, and text-conditioned image generation.
+
+where xt = √αtx+√1 −αtϵ represent the noisy version of the clean image x0, corrupted by the gaussian noise ϵ ∼N(0, 1) to timestep t.
+
+Stable Diffusion is a family of latent diffusion models (LDMs) [6] designed to generate high-quality images conditioned on textual prompts. Unlike traditional pixel-space diffusion models, LDMs operate in a com- pressed latent space, significantly improving computational efficiency while maintaining visual fidelity. This is achieved by encoding input images into a lower-dimensional latent representation using a pre-trained au- toencoder. The diffusion process is then applied in this latent space, and the final output is decoded back into pixel space. The 1.x versions of Stable Diffusion (1.0 to 1.5) introduced this efficient framework for open-domain image synthesis, using a frozen CLIP [9] text encoder for prompt conditioning and a U-Net architecture for
+
+latent denoising. These models, trained on subsets of LAION-2B [10], quickly gained popularity due to their open-source release, high versatility, and ease of fine-tuning. Stable Diffusion v2.1 introduced several architectural upgrades, including a switch to OpenCLIP [11] and training on higher resolutions (768×768), improving image structure and fidelity. SDXL [12], a major advancement in the series, uses a two-stage architecture with separate base and refiner models, allowing better handling of complex prompts and achieving significantly improved realism and prompt alignment. SD-Turbo [13] further innovates by enabling near real-time image generation through a Adversarial-diffusion- distillation (ADD) process, where a student model trains to mimic the performance of a teacher model (SD2.1 or SDXL) using fewer inference steps. Most recently, Stable Diffusion 3 (SD3) [8] integrates a diffusion transformer backbone and adopts multi- modal training (see Section 2.3 below), combining both text and image understanding for improved prompt adherence, compositional reasoning, and consistency. SD3 is designed for scalability and robustness, closing the gap between open models and proprietary systems like DALL·E 3 and Midjourney in terms of control- lability and quality.
+
+Rectified Flow (RF) [14] is a recent generative modeling framework that simplifies and generalizes diffusion models by replacing stochastic denoising with a deterministic vector field, based on the Flow Matching principle introduced in [15]. While RF is a training paradigm rather than an architectural change, its relevance to FLUX stems from the fact that FLUX was trained using this method. In this report, we do not provide a detailed explanation of Rectified Flow. Instead, we briefly highlight the key distinction between standard diffusion model training and the approach used in FLUX. This divergence in training schemes likely contributes to differences in performance and convergence behavior. For a comprehensive understanding of Rectified Flow, we refer readers to the original works. While diffusion models (such as DDPMs [4]) learn to predict the noise (ϵ) added during a forward diffusion process (see Section 1.2), RFs train a model to predict a velocity vector v that directly points from a noisy point x0 (not to be confused with DM notation, where x0 denotes the “clean” image) back to the data point x1, along a straight interpolation path. In diffusion models, the network is trained using the ϵ-objective, which minimizes the difference between the predicted noise ϵθ(xt, t) and true noise ϵ added to a sample (see Equation (1)) In contrast, RF defines a deterministic interpolation between the data x1 and noise x0, and trains the model vθ to predict the velocity vector between the two:
+
+where xt = (1 −t)x0 + tx1 is a linear interpolation between x0 ∼N(0, I) and x1 ∼pdata, and v(xt, t) represents the target vector pointing from x0 to x1. Unlike diffusion models that rely on stochastic sampling, noise schedules, and denoising objectives, Rec- tified Flow leverages a velocity-based formulation that defines a deterministic transport path from noise to data. This approach eliminates the need for iterative noise perturbation and reverse denoising, enabling faster and more stable image synthesis. By solving a simple ODE with a learned velocity field, Rectified Flow achieves high-quality generation with significantly reduces complexity in both training and inference—making it a compelling and efficient alternative to traditional diffusion-based methods.
+
+Lv = Ex0,x1,t  ∥vθ(xt, t) −(x1 −x0)∥2 (2)
+
+Transformers are a class of neural network architectures originally introduced for natural language processing (NLP) [16]. The transformer’s core innovation is the self-attention mechanism, which enables the model to weigh relationships between all elements in an input sequence. This architecture has since become the foundation of many state-of-the-art models across modalities—including text, image, video, and multimodal systems. In each attention block, the model computes three matrices from the input embeddings: queries (Q), keys (K), and values (V), using learned linear projections. The attention scores are computed as:
+
+Here, dk is the dimensionality of the key vectors, and the softmax operation ensures the attention weights sum to 1. This mechanism allows the model to assign different levels of importance to different tokens when computing a new representation for each token in the sequence. In practice, multi-head attention is used, where multiple sets of Q/K/V projections are computed in parallel to capture diverse types of relationships. For vision tasks, Vision Transformers (ViTs) [17] tokenize an image into fixed-size non-overlapping patches (e.g., 16×16 pixels), flatten each patch, and project them into an embedding space. These patch embeddings are then processed by a standard transformer encoder, often with added positional encodings to preserve spatial structure. This enables ViTs to model long-range dependencies across an image without convolutional inductive biases. While originally Q/K/V represenations are all projected from the same input embedding in a process denotes Self-Attention, In text-to-image generation, transformers often use Cross-Attention to condition image synthesis on textual prompts. In this setup, the queries (Q) are projected from the image tokens, while the keys (K) and values (V ) are projected from the text embeddings. This allows the model to modulate image generation based on semantic information from the prompt.
+
+Attention(Q, K, V ) = softmax(QKT
+
+FLUX.1 [7] is a rectified flow transformer trained in the latent space of an image encoder, introduced by Black Forest Labs in August 2024. The FLUX.1 models (see Section 3) demonstrate State-of-the-art (SoTA) performance for text-to-image tasks, in both terms of output quality and image-text alignment, as demonstrated in Figures 2 and 3 using the ELO-score metric, which ranks image generation models based on human preferences in head-to-head comparisons. A qualitative illustration and comparison to SD is provided in Appendix A. While the model adheres to the Rectified Flow training paradigm (according to the developers statement), the exact details regarding the training setup —including the dataset, scheduling strategy, and hyperparam- eters— have not been publicly disclosed. However, the model’s architecture and inference scheme can be reverse-engineered from the publicly available inference code.
+
+In this section, we outline the model’s architecture to demystify its behavior at inference time. A top- view of the architecture is illustrated in Figure 4, where text embeddings and latent image embeddings are iteratively processed via a series of attention blocks. In the following section we deep-dive into the different components of the model. We begin with a high-level overview of FLUX’s sampling pipeline in Section 2.2, highlighting the key stages and the pre-trained components involved, followed by a deep-dive into the transformer’s architecture in Section 2.3, where a detailed explanation is provided to the different stages and concepts used to construct it.
+
+In this section, we describe the sampling pipeline of FLUX.1. For simplicity, we refer to the text-to-image sampling process as being conditioned on a single prompt per sample. Similar to LDM [6], FLUX operates in a latent space, where the final latent output is decoded to reconstruct the RGB image in pixel space. Following LDM’s approach, the developers trained a convolutional autoencoder from scratch using an adversarial objective, but scaled up the latent representation from 4 channels (in LDM) to 16 channels. The sampling pipeline consists of three phases: (1) Initiation and Pre-processing (2) Iterative Refinement, and (3) Post-processing. An overview of these steps is illustrated in Figure 5, where the notations follows the ones used in the official implementation of FLUX.1 pipeline in diffusers [19]. In the section below, we primarily focus on the Initiation and Pre-processing phase of the pipeline. A brief overview of the Iterative
+
+2.2 FLUX.1 Sampling Pipeline
+
+Figure 2: FLUX.1 defines a new state-of-the-art in image detail, prompt adherence, style diversity and scene complexity for text-to-image synthesis. Evaluation from [18]
+
+Figure 3: ELO scores for different aspects: Prompt Following, Size/Aspect Variability, Typography, Output Diversity, Visual Quality. Evaluation from [18]
+
+Figure 4: High-level overview of the FLUX.1 architecture. Text embeddings and latent image embeddings are iteratively processed through a series of attention blocks to generate a text-conditioned image.
+
+Refinement and Post-processing phases is provided at the end of this section. The Iterative Refinement phase, in which the FLUX transformer operates, is discussed in detail in Section 2.3.
+
+2.2.1 Initiation and Pre-processing
+
+In this phase, the model processes the user-provided inputs to prepare them for the main transformer’s refinement stage. A key component of this stage is the text encoder, which processes the textual guidance supplied by the user. FLUX.1 utilizes two pre-trained text encoders:
+
+CLIP Text Encoder. CLIP (Contrastive Language–Image Pretraining) [9] is a foundation model devel- oped by OpenAI, designed to bridge vision and language understanding. CLIP’s text-encoder transforms natural language prompts into class level or dense, high-dimensional embeddings that can be directly com- pared with image embeddings in a shared latent space. Trained on hundreds of millions of image–text pairs, the CLIP text encoder captures rich semantic information, enabling models to align textual descriptions with corresponding visual content effectively, making it widely used in text-to-image generation tasks.
+
+T5 Text Encoder. T5 (Text-To-Text Transfer Transformer) [20] is a versatile language model developed by Google that frames all NLP tasks (e.g., translation, summarization, and question answering) as text-to-text problems. Its text encoder converts input text into contextualized embeddings using a Transformer-based architecture trained over massive language corpora. Unlike CLIP’s text encoder, which is trained jointly with an image encoder to produce embeddings aligned with visual features for contrastive learning, T5 is trained purely on textual data and optimized for language understanding and generation. This makes T5 well-suited for providing rich, token-level semantic representations even for long and complex textual prompmts.
+
+Below, we outline all the required inputs and describe how the model processes them in preparation for the refinement stage. The pipeline’s required inputs are:
+
+• text: textual prompt guides the image generation process to enforce specified features or qualities.
+
+• guidance scale: controls the strength of conditioning.
+
+• num inference steps: how many iterative sampling steps should be performed.
+
+• resolution: Specifies the spatial resolution (height and width) of the generated image.
+
+Figure 5: Flux.1 sampling pipeline. Just like in Diffusion Models, after pre-processing the noisy latent zt (denoted hidden statet) is being iteratively refined in the latent space. The final refined z0 (=hidden states0) is decoded into an RGB image using a pre-trained VAE decoder.
+
+Once initiated with those inputs, they are being preprocessed as follows:
+
+• text: The textual prompt is being encoded using two pre-trained text encoders:
+
+– T5: provides dense (per token) embeddings, denoted encoder hidden states – CLIP: provides pooled embeddings (one embedding for the whole prompt, like CLS embedding), denoted pooled projection
+
+• num inference steps: Specifies the total number of sampling steps used during inference. It deter- mines a subset of timesteps from the full diffusion range t ∈[0 : T], where typically t = 1000. Iterating over these selected timesteps defines the sampling trajectory.
+
+• resolution: The desired resolution determines the spatial dimensions of the initial (latent) noise sample z0 ∼N(0, 1). it is also used to define the img ids- a set of per-token indicators, pointing at the token’s spatial location on a 2D grid. Given a target resolution (H,W) in pixel space, the corresponding latent dimensions (h, w) are computed as (h = H//V AEscale) and (w = W//V AEscale) where V AEscale = 8. The image-token grid is further downsampled to dimensions (h//2, w//2), and each token is assigned a unique identifier of the form (t, ˆh, ˆw), where ˆh ∈[0 : h −1] and ˆw ∈[0, w −1], indicating the token’s location on a 2D spatial grid. text ids are initiated using the same structure of img ids, but with t = h = w = 0 for all tokens. Formally, text ids = n·(0, 0, 0) where n is the maximal number of tokens in T5 (= 512).
+
+2.2.2 Iterative Refinement and Post-processing
+
+Let Φ = [encoder hidden states, pooled projection, guidance, img ids, text ids] be a set the pre-processed pipeline’s inputs. Same as in Diffusion Models, [zt, t, Φ], are iteratively fed into the transformer during inference sampling, s.t.:
+
+Where vθ is the trainable network that estimates the velocity vector (see 1.4) and Samp(·) refers to the Flow-Matching Euler Discrete sampler [15]. Pay attention to the notation that differs from the one used in Diffusion Models. Here timesteps ranges between 0 to 1, with z1 the clear image and z0 the pure Gaussian noise. In Section 2.3 we explore the architecture of vθ. After the iterative refinement, the final clean latent z1 is decoded via pre-trained VAE model to get the final image x1.
+
+∀t ∈timesteps : zt+∆t = Samp(vθ(zt, t, Φ)) (4)
+
+Figure 6: Flux Transformer: high-level overview
+
+The core component of FLUX.1’s synthesis pipeline is the velocity predictor vθ, which is optimized to es- timate the velocity vector along the sampling trajectory (see Section 1.4). Similar to SD3 [8], FLUX.1 replaces the conventional U-Net architecture with a fully transformer-based design. A high-level overview of the transformer’s operations at each sampling step is provided in Figure 6 using the notation defined in the official implementation by diffusers [19]. On every iteration, the inputs are preprocessed before they ate fed into a sequence of transformer blocks. There are two types of transformer blocks: (1) Double-Stream (see Section 2.3.2), and (2) Single-Stream (see Section 2.3.3. Both blocks employ a Multi-Modal Attention: joint self-attention mechanism to process concatenated text and image tokens in a unified attention oper- ation, enabling bidirectional interactions that capture both self-information and cross-modal information between text and image modalities. Below we provide a step-by-step guide to the per-iteration pre-process (Section 2.3.1), and the Double-Stream (Section 2.3.2) and Single-Stream (Section 2.3.3) attention blocks.
+
+2.3.1 Per-Iteration Pre-process
+
+Along the sampling trajectory, the transformer is called multiple times, once at each sampling iteration. In every call, it is provided with an updated set of parameters:
+
+• the guiding parameter timestep is iterated from the pre-calculated list of values between 1 to 0.
+
+These parameters join the “constant” inputs (which remain constant across different iterations) pre- calcualted in the pipeline’s pre-process stage (Section 2.2.1). The transformer pre-processes it’s inputs internally as described in Figure 7. Formally, the following steps are taken:
+
+• zt (refers as hidden state in the official implementation by diffusers [19]) is the latent representation which is (iteratively) refined from Gaussian noise into a clear image. It is being updated along the sampling trajectory.
+
+Figure 7: Flux Transformer: per-iteration inputs pre-process
+
+• use of per-domain linear layers to bring the latent embeddings and dense-prompt-embeddings (T5) into a shared dimensionality of 3072 features per token.
+
+• construction of guiding embeds. Unlike Diffusion Models, that encode only the “temporal” information (i.e, timestep) in this phase, FLUX.1 uses both the timestep and the pooled prompt embeds (from CLIP) as guiding embeddings, yet keeps the traditional notation temb. It uses sinusoidal projection (As is [4]) to embed the integer values of the timestep and guidance, than applies dedicated linear projection layers to each component to bring them to the shared dimensionality of 3072 features. Finally, the 3 projected embeddings are summed to create the final temb (marked in a red block in Figure 7)
+
+• the img ids and text ids (see Section 2.2) are concatenated, than used to extract per-token positional embeds. To extract positional embeddings from 3D token indices (t,h,w), each axis is first converted to a continuous embedding using axis-specific sinusoidal frequencies scaled by a constant θ. The cosine and sine of the resulting frequency-position products are computed and interleaved to form real-valued vectors. These are then concatenated across all axes to produce the final positional embedding as a pair of tensors (cosine and sine), ready to be used in rotary positional encoding (the process os composed in the purple block in Figure 7). Note that this process is not influenced neither by timestep nor hidden states, hence the pos embeds are constant across different sampling steps.
+
+The pos embeds and temb parameters are used to support the attention mechanism along the step, while hidden states and encoder hidden states are being processed and refined along the step.
+
+2.3.2 Double-Stream Transformer Block
+
+After pre-process, a series of 19 Double-Stream Transformer blocks are applied. Those blocks employ separate weights for image and text tokens. Multi-modality is achieved by applying the attention operation over the concatenation of the tokens (see Figure 8b). Each stream (latent and prompt) uses Adaptive Layer Normalization (AdaLN) [21] layers for normaliza- tion and modulation (see Figure 9 and Figure 8a). AdaLN is a conditioning mechanism used in Transformer- based models [22, 23] to modulate intermediate activations based on external input, such as text or image embeddings, based on the Adaptive Instance Normalization (AdaIN) mechanism proposed in [24]. Unlike standard Layer Normalization, which applies fixed scaling and shifting parameters, AdaLN dynamically gen-
+
+(a) Double-Stream Attention Block: latent and prompt embeddings are processed separately, in a standard multi-modal attention scheme.
+
+(b) The attention operation is applied over the concatenation of the tokens.
+
+Figure 8: Double-Stream Block.
+
+Figure 9: AdaLN layer, where MSA (Multi-head Self Attention) and MLP (Multi-Layer Processor) modula- tion parameters are computed based on the input tensor. In Single-Stream block (see Section 2.3.3), MLP modulation is not computed.
+
+erates these parameters as functions of a conditioning vector (see Figure 9). This allows the model to adapt its behavior at each layer according to the input prompt or guidance signal. The normalized tensors are used to extract the K, Q, and V matrices for each domain, which are then concatenated for mixed attention. The concatenated K and Q matrices are rotated using precomputed Rotary Positional Embeddings. Rotary Positional Embeddings (RoPE) [25] are a method for injecting posi- tional information into Transformer models by rotating the query and key vectors in multi-head self-attention according to their token positions. Unlike traditional sinusoidal or learned positional embeddings that are added to input tokens, RoPE applies a rotation in the complex plane that preserves relative positional re- lationships across sequences. This approach allows the model to generalize better to unseen sequence lengths and supports extrapolation beyond training data. RoPE has become popular in recent vision-language mod- els, where understanding spatial relationships between tokens, especially when re-purposing textual positions for image patches, is crucial. The rotated K and Q matrices are passed through the mixed attention operation. The outputs are separated back into their respective streams and alpha-blended with the residual input using the gatemsa parameter, extracted by the AdaLN layer. The results are further normalized via a LayerNorm (LN) layer and modulated using the scalemlp and shiftmlp parameters, also extracted by the AdaLN layer, before being passed to the feedforward layer. Finally, the output is alpha-blended with the unnormalized input using the gatemlp parameter from the AdaLN layer. The entire process is illustrated in Figure 8a.
+
+(a) Single-Stream Attention Block: latent and prompt embeddings are processed together, in a simulta- neous attention scheme.
+
+(b) The K, Q and V metrices are computed directly from the concatenated representation.
+
+2.3.3 Single-Stream Transformer Block
+
+Figure 10: Single-Stream Block.
+
+After the series of Double-Stream blocks is applied, the processed latent and prompt embeddings are con- catenated and fed through a series of Single-Stream blocks. While the Double-Stream blocks apply different weights for prompt and latent embeddings, the Single-Stream blocks use a single set of weights to process a concatenated tensor or latent and text embeddings (see Figure 10). In addition, the Single-Stream blocks re- place the standard sequential attention block (where an MLP, like Feed-Forward is applied after the attention step), with a parallel mechanism where the attention block and an MLP are computed simultaneously from the same input (see Figure 10a). This should not be confused with the multi-modal attention mechanism, which is used in both Double-Stream and Single-Stream blocks, where self-attention and cross-attention are computed jointly in parallel. A comparison between the Double-Stream and Single-Stream block is summarized in Table 1:
+
+Property Double-Stream Block Single-Stream Block Weight Sharing Uses separate weights for text and latent tokens in both attention and feedforward layers.
+
+Uses shared weights for both text and latent tokens across attention and feedforward layers. Computation Style Attention and feedforward (MLP) layers are applied sequentially, where the attention’s output de- fines the feedforward’s input.
+
+Attention and feedforward layers are computed in parallel using the same input for both.
+
+Table 1: Comparison between Double-Stream and Single-Stream blocks in FLUX.1
+
+Specifically, the Double-Stream and Single-Stream blocks differ in two main attributes: weight sharing between text and latent tokens (shared vs. not shared), and computation style (sequential vs. parallel). While the exact motivation behind the FLUX.1 developers choice of this specific architecture is not docu- mented, the following is a brief comparison of these attributes, highlighting the possible pros and cons of each, potentially shedding light on the reasoning behind including both block types in FLUX.1’s architecture.
+
+Weight Sharing (Shared vs. Not Shared) Weight sharing refers to whether the same attention and feedforward parameters are used for both text and latent tokens. In the Single-Stream block, shared weights enable more efficient parameter usage and promote tighter integration between modalities, which may help the model generalize better across domains. However, this comes at the cost of reduced flexibility, as both token types must be processed identically
+
+despite potentially having very different characteristics. In contrast, the Double-Stream block avoids weight sharing, allowing the model to specialize its representations for text and latent tokens independently. This specialization can improve performance when domain-specific distinctions are critical, though it increases model size and computational overhead. The inclusion of both strategies in FLUX.1 suggests a deliberate balance between efficiency and specialization.
+
+Computation Style (Sequential vs. Parallel) The key distinction in computation style lies in how the attention and feedforward (MLP) layers are applied within a block. In the Double-Stream block, the computation is sequential: the input is first normalized, passed through an attention layer, then normalized again before being fed into the feedforward layer. This means the output of the attention block defines the input to the MLP feedforward, enabling tightly coupled, stage-wise processing that allows each layer to build upon the previous one. In contrast, the Single-Stream block follows a parallel design. The input is normalized once, and the resulting representation is simultane- ously passed through both the attention and MLP layers independently. Their outputs are then combined downstream. This parallelism increases efficiency and allows for broader representation capacity per block, but it may limit the depth of inter-layer interaction present in sequential designs. FLUX.1’s use of both may reflect a trade-off between expressive sequential processing and the speed or simplicity of parallel computa- tion.
+
+In summary, Single-Stream blocks emphasize efficiency and simplicity through parallel computation and shared weights, while Double-Stream blocks favor specialization and expressiveness with sequential flow and separate weights. While the Double-Stream blocks follow the mm-DiT design previously used in SD3 [8], the addition of Single-Stream blocks may reflect the FLUX authors’ intention to expand the model’s capacity in a relatively lightweight and efficient manner.
+
+The FLUX.1 suite of text-to-image models comes in three variants, all share the same architecture of 12B parameters, striking a balance between accessibility and model capabilities [18].
+
+• FLUX.1[pro] This the highest-performing variant of the FLUX.1 family, offering superior prompt alignment, visual detail, and output diversity. It is designed for commercial use and is accessible only through licensed API endpoints such as Replicate or Fal.ai. The model weights are not publicly released, making it a hosted-only solution. This version is ideal for production environments where top-tier image generation quality is critical and commercial licensing is feasible.
+
+• FLUX.1[dev] provides an open-weight alternative to Pro, guidance-distilled [26] from it. It is licensed strictly for non-commercial use, making it accessible to researchers, developers, and hobbyists for experimentation and academic work. Unlike Pro, Dev can be downloaded and run locally, offering full control and flexibility for non-commercial applications. The FLUX.1 [dev] model is available via huggingface can be directly tried out on Replicate or fal.ai. It should be noted that the Dev version might require more sampling steps than the pro version to achieve high-level performance.
+
+• FLUX.1[schnell] is a speed-optimized, distilled variant of FLUX.1 Pro, designed to significantly reduce inference time while retaining reasonable image quality. It shares the same 12B architecture but is trained via timesteps-distillation [27] from the Pro model, meaning it learns to mimic Pro’s outputs using fewer sampling steps, up to a single step, by optimizing for speed and efficiency. This results in faster generations at the cost of some prompt fidelity and fine detail. Released under the permissive Apache 2.0 license, Schnell allows unrestricted commercial use, making it ideal for real- time, low-latency applications and lightweight deployments where speed and open licensing outweigh the need for peak visual fidelity.
+
+• FLUX1.1[pro] is an enhanced version of the FLUX.1[pro] model, capable of faster image generation while also improving image quality, prompt adherence, and diversity. The model introduces new modes—Ultra, enabling 4x higher resolution without compromising speed, and Raw, producing hyper- realistic, candid-style images. Additionally, a prompt upsampling feature leverages large language models (LLMs) to expand and enrich user prompts, enhancing creative outputs. While not covered in this report, FLUX 1.1 Pro is available via API on platforms like Replicate and Fal.ai, with commercial licensing required.
+
+Originally developed for text-to-image generation, FLUX.1 has since been extended by Black Forest Labs with a suite of tools supporting a range of use cases beyond its original purpose. This report does not explore each tool in depth as it does for the FLUX.1 model itself. Below is a list of publicly available tools, current as of June 5th, 2025:
+
+• FLUX-Fill is an inpainting and outpainting models, enabling editing and expansion of real and generated images given a text description and a binary mask.
+
+• FLUX-Canny enables structural guidance based on canny edges extracted from an input image and a text prompt.
+
+• FLUX-Depth enables structural guidance based on a depth map extracted from an input image and a text prompt.
+
+• FLUX-Redux is an adaptor that aligns dense (per-token) image embeddings extracted by SigLIP image encoder [28] with the T5 text-embedding’s space for image-conditioned generation with a pre- traine FLUX.1 base model. While limited for image variation in the Dev version, It integrates into more complex workflows unlocking image restyling via prompt when using the FLUX1.1 [pro] Ultra model, allowing for combining input images and text prompts.
+
+• FLUX-Kontext extends the text-to-image capabilities of the base FLUX model into powerful in- context generation and editing workflows by enabling multimodal conditioning—allowing users to guide generation using both text and reference images. While FLUX-Redux had already introduced basic multimodal conditioning for image variation and prompt-driven restyling, FLUX-Kontext unlocks ad- vanced functionality such as localized edits, style transfer, and character or scene consistency across images. With models like Kontext [pro] and [max], the focus shifts toward fast, iterative generation and high-precision editing. As of June 5th, 2025, the FLUX-Kontext models are not yet publicly released, and therefore could not be directly explored or evaluated in this report.
+
+[1] D. P. Kingma, M. Welling et al., “Auto-encoding variational bayes,” 2013.
+
+[2] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu, D. Warde-Farley, S. Ozair, A. Courville, and Y. Ben- gio, “Generative adversarial networks,” Communications of the ACM, vol. 63, no. 11, pp. 139–144, 2020.
+
+[3] G. Papamakarios, E. Nalisnick, D. J. Rezende, S. Mohamed, and B. Lakshminarayanan, “Normalizing flows for probabilistic modeling and inference,” Journal of Machine Learning Research, vol. 22, no. 57, pp. 1–64, 2021.
+
+[4] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” Advances in neural informa- tion processing systems, vol. 33, pp. 6840–6851, 2020.
+
+[5] A. Ramesh, M. Pavlov, G. Goh, S. Gray, C. Voss, A. Radford, M. Chen, and I. Sutskever, “Zero-shot text-to-image generation,” in International conference on machine learning. Pmlr, 2021, pp. 8821–8831.
+
+[6] R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, 2022, pp. 10 684–10 695.
+
+[7] B. F. Labs, “Flux,” https://github.com/black-forest-labs/flux, 2024.
+
+[8] P. Esser, S. Kulal, A. Blattmann, R. Entezari, J. M¨uller, H. Saini, Y. Levi, D. Lorenz, A. Sauer, F. Boesel et al., “Scaling rectified flow transformers for high-resolution image synthesis,” in Forty-first international conference on machine learning, 2024.
+
+[10] C. Schuhmann, R. Beaumont, R. Vencu, C. W. Gordon, R. Wightman, M. Cherti, T. Coombes, A. Katta, C. Mullis, M. Wortsman, P. Schramowski, S. R. Kundurthy, K. Crowson, L. Schmidt, R. Kaczmarczyk, and J. Jitsev, “LAION-5b: An open large-scale dataset for training next generation image-text models,” in Thirty-sixth Conference on Neural Information Processing Systems Datasets and Benchmarks Track, 2022. [Online]. Available: https://openreview.net/forum?id=M3Y74vmsMcY
+
+[9] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning transferable visual models from natural language supervision,” in International conference on machine learning. PmLR, 2021, pp. 8748–8763.
+
+[11] G. Ilharco, M. Wortsman, R. Wightman, C. Gordon, N. Carlini, R. Taori, A. Dave, V. Shankar, H. Namkoong, J. Miller, H. Hajishirzi, A. Farhadi, and L. Schmidt, “Openclip,” Jul. 2021. [Online]. Available: https://doi.org/10.5281/zenodo.5143773
+
+[12] D. Podell, Z. English, K. Lacey, A. Blattmann, T. Dockhorn, J. M¨uller, J. Penna, and R. Rom- bach, “Sdxl: Improving latent diffusion models for high-resolution image synthesis,” arXiv preprint arXiv:2307.01952, 2023.
+
+[13] A. Sauer, D. Lorenz, A. Blattmann, and R. Rombach, “Adversarial diffusion distillation,” in European Conference on Computer Vision. Springer, 2024, pp. 87–103.
+
+[14] X. Liu, C. Gong, and Q. Liu, “Flow straight and fast: Learning to generate and transfer data with rectified flow,” arXiv preprint arXiv:2209.03003, 2022.
+
+[15] Y. Lipman, R. T. Chen, H. Ben-Hamu, M. Nickel, and M. Le, “Flow matching for generative modeling,” arXiv preprint arXiv:2210.02747, 2022.
+
+[16] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,  L. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems, vol. 30, 2017.
+
+[17] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Min- derer, G. Heigold, S. Gelly et al., “An image is worth 16x16 words: Transformers for image recognition at scale,” arXiv preprint arXiv:2010.11929, 2020.
+
+[18] “Black-forest-labs official flux.1 announcement,” https://bfl.ai/announcements/24-08-01-bfl.
+
+[19] P. von Platen, S. Patil, A. Lozhkov, P. Cuenca, N. Lambert, K. Rasul, M. Davaadorj, D. Nair, S. Paul, W. Berman, Y. Xu, S. Liu, and T. Wolf, “Diffusers: State-of-the-art diffusion models,” https://github. com/huggingface/diffusers, 2022.
+
+[20] C. Raffel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, and P. J. Liu, “Exploring the limits of transfer learning with a unified text-to-text transformer,” Journal of machine learning research, vol. 21, no. 140, pp. 1–67, 2020.
+
+[21] F. E. Keddous, A. Llanza, N. Shvai, and A. Nakib, “Vision transformers inference acceleration based on adaptive layer normalization,” Neurocomputing, vol. 610, p. 128524, 2024.
+
+[22] A. Nichol, P. Dhariwal, A. Ramesh, P. Shyam, P. Mishkin, B. McGrew, I. Sutskever, and M. Chen, “Glide: Towards photorealistic image generation and editing with text-guided diffusion models,” arXiv preprint arXiv:2112.10741, 2021.
+
+[23] A. Sauer, T. Karras, S. Laine, A. Geiger, and T. Aila, “Stylegan-t: Unlocking the power of gans for fast large-scale text-to-image synthesis,” in International conference on machine learning. PMLR, 2023, pp. 30 105–30 118.
+
+[24] X. Huang and S. Belongie, “Arbitrary style transfer in real-time with adaptive instance normalization,” in Proceedings of the IEEE international conference on computer vision, 2017, pp. 1501–1510.
+
+[25] J. Su, M. Ahmed, Y. Lu, S. Pan, W. Bo, and Y. Liu, “Roformer: Enhanced transformer with rotary position embedding,” Neurocomputing, vol. 568, p. 127063, 2024.
+
+[26] C. Meng, R. Rombach, R. Gao, D. Kingma, S. Ermon, J. Ho, and T. Salimans, “On distillation of guided diffusion models,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2023, pp. 14 297–14 306.
+
+[28] X. Zhai, B. Mustafa, A. Kolesnikov, and L. Beyer, “Sigmoid loss for language image pre-training,” in Proceedings of the IEEE/CVF international conference on computer vision, 2023, pp. 11 975–11 986.
+
+[27] A. Sauer, F. Boesel, T. Dockhorn, A. Blattmann, P. Esser, and R. Rombach, “Fast high-resolution image synthesis with latent adversarial diffusion distillation,” in SIGGRAPH Asia 2024 Conference Papers, 2024, pp. 1–11.
+
+A Qualitative Evaluation
+
+In this section, we provide a qualitative comparison of FLUX.1’s performance against Stable Diffusion (SD) 2.1, which remains widely used in various data generation projects across R&D and Engineering. We use FLUX.1[dev] with 50 sampling steps and a guidance scale of 2.5. For SD 2.1, we use 50 sampling steps and a guidance scale of 7.5. All comparisons are conducted at a resolution of 512 × 512, which is the recommended resolution for SD 2.1. We use the publicly available version of the two models without any additional finetuning. We compare the models’ performance on text-to-image generation of automotive scenarios across the following aspects:
+
+• Overall image quality (Figure 1)
+
+• text-image alignment (Figure 2)
+
+• Alignment to sparse prompts: text descriptions that are minimal or loosely defined. (Figure 3)
+
+• Synthesis of rare concepts (Figure 4)
+
+• Adherence to complex prompts containing multiple descriptive elements. (Figure 5)
+
+In all examples, even if not specifically noted, the models were prompted to generate images as if captured from a vehicle’s front dashcam. While SD 2.1 struggled to maintain the specifically requested viewing angle, FLUX.1 consistently remained faithful to it across different tasks. We also demonstrate FLUX.1 capability to generate images in various resolutions and aspect ratios (Figure 6). All in all, FLUX.1 brings state-of-the-art genrative capabilities in all aformentioned aspects, compared to previous models, and particularly compared to SD2.1. These gaps become more pronaunced when relates to complex generative tasks, such as the automotive case, where FLUX’s rich voucabulry and heavy pre-training enable hin to deal with generative tasks that are way out of distribution for previos models. It also handels high-resolution images with various aspect ratios. These capabilities may become handy in automotive- related augmentation tasks like Adverse viewing conditions and rare-concpts generation/inpaining, as well as in data restoration and enhancement.
+
+Figure 1: Overall image quality comparison. FLUX.1 generates high quality automotive scenes with different attributes (here: weather and lighting) without additional optimization.
+
+Figure 2: FLUX.1 is sensitive to subtle differences in textual guidance- for example, distinguishing between light and heavy snow. It also handles complex attributes, such as in the prompt: “A sunny day after a snowy period”.
+
+Figure 3: FLUX.1 is capable of interpreting textual guidance that is minimal or loosely defined, such as ‘adverse weather” “difficult viewing conditions” while remaining sensitive to direct requests like “blurry”.
+
+Figure 4: FLUX.1’s rich vocabulary and extensive pre-training enable it to handle rare concepts such as “boat-trailer” and “upside-down crashed car”.
+
+Figure 5: The dense prompt embeddings produced by the T5 text encoder enable FLUX.1 to adhere to complex prompts containing multiple requests.
+
+Figure 6: While existing U-Net–based diffusion models are typically limited to a specific or fixed set of resolutions, FLUX.1 can operate across a wide range of resolutions and aspect ratios.
