@@ -2,6 +2,7 @@ import os
 import glob
 import argparse
 import shutil
+import hashlib
 import fitz  # PyMuPDF
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
@@ -11,7 +12,11 @@ from dotenv import load_dotenv
 # 載入環境變數
 load_dotenv()
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+
+def file_hash(path):
+    """計算檔案的 MD5 hash，用於偵測內容變動"""
+    return hashlib.md5(open(path, "rb").read()).hexdigest()
 
 def clean_and_extract_pdf(pdf_path):
     """
@@ -40,7 +45,7 @@ def clean_and_extract_pdf(pdf_path):
                 
     return "\n\n".join(full_text)
 
-def chunk_text(text, chunk_size=1000, overlap=200):
+def chunk_text(text, chunk_size=800, overlap=200):
     """
     將長文本切分為 Overlapping Chunks。
     依字元數切割，避免英文單字被切斷的簡單實作。
@@ -99,33 +104,44 @@ def main():
     collection = chroma_client.get_or_create_collection(name="ai_art_papers")
 
     # ==========================================
-    # 3. 讀取與處理 PDF (增量更新邏輯)
+    # 3. 讀取與處理原始檔案（增量更新邏輯）
+    #    支援格式：.pdf、.txt
     # ==========================================
-    pdf_files = glob.glob(os.path.join(raw_dir, "*.pdf"))
-    if not pdf_files:
-        print("No PDF files found in data/raw/")
+    raw_files = (
+        glob.glob(os.path.join(raw_dir, "*.pdf")) +
+        glob.glob(os.path.join(raw_dir, "*.txt"))
+    )
+    if not raw_files:
+        print("No supported files (.pdf, .txt) found in data/raw/")
         return
 
-    print(f"Found {len(pdf_files)} PDF files. Processing...")
-    
-    for pdf_path in tqdm(pdf_files, desc="Processing PDFs"):
-        filename = os.path.basename(pdf_path)
+    print(f"Found {len(raw_files)} files. Processing...")
+
+    for raw_path in tqdm(raw_files, desc="Processing files"):
+        filename = os.path.basename(raw_path)
         base_name = os.path.splitext(filename)[0]
         txt_path = os.path.join(processed_dir, f"{base_name}.txt")
-        
-        # [增量更新機制] 如果 txt 已經存在，代表處理過了，跳過文字萃取
-        if not os.path.exists(txt_path):
-            extracted_text = clean_and_extract_pdf(pdf_path)
-            with open(txt_path, "w", encoding="utf-8") as f:
-                f.write(extracted_text)
-        else:
-            with open(txt_path, "r", encoding="utf-8") as f:
+
+        # [增量更新機制] 用 MD5 hash 偵測原始檔案是否有變動
+        current_hash = file_hash(raw_path)
+        existing_docs = collection.get(where={"source": filename}, include=["metadatas"])
+        stored_hash = existing_docs["metadatas"][0].get("hash") if existing_docs["ids"] else None
+
+        if stored_hash == current_hash:
+            continue  # 內容未變動，跳過
+
+        # 有變動（或首次處理）：刪除舊 chunks 再重建
+        if existing_docs["ids"]:
+            collection.delete(where={"source": filename})
+
+        if raw_path.endswith(".pdf"):
+            extracted_text = clean_and_extract_pdf(raw_path)
+        else:  # .txt
+            with open(raw_path, "r", encoding="utf-8") as f:
                 extracted_text = f.read()
-                
-        # 檢查該篇論文是否已經在 DB 中 (透過 metadata 過濾)
-        existing_docs = collection.get(where={"source": filename})
-        if len(existing_docs["ids"]) > 0:
-            continue  # 已經存在於 DB 中，跳過 Embedding 寫入
+
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(extracted_text)
 
         # ==========================================
         # 4. Chunking & Embedding 寫入 DB
@@ -136,7 +152,7 @@ def main():
             
         # 產生 ID 與 Metadata
         ids =[f"{base_name}_chunk_{i}" for i in range(len(chunks))]
-        metadatas =[{"source": filename, "chunk_index": i} for i in range(len(chunks))]
+        metadatas =[{"source": filename, "chunk_index": i, "hash": current_hash} for i in range(len(chunks))]
         
         # 產生向量 (SentenceTransformer 支援直接傳入 list of strings)
         embeddings = embedder.encode(chunks).tolist()
