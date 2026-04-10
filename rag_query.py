@@ -10,9 +10,6 @@ load_dotenv()
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL")
 
-assert CHROMA_PERSIST_DIR, "Please set CHROMA_PERSIST_DIR in .env"
-assert EMBEDDING_MODEL_NAME, "Please set EMBEDDING_MODEL in .env"
-
 def get_retriever():
     """初始化 ChromaDB 與 Embedding 模型"""
     print("正在載入向量模型與資料庫...")

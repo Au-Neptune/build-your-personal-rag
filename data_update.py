@@ -14,9 +14,6 @@ load_dotenv()
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL")
 
-assert CHROMA_PERSIST_DIR, "Please set CHROMA_PERSIST_DIR in .env"
-assert EMBEDDING_MODEL_NAME, "Please set EMBEDDING_MODEL in .env"
-
 def file_hash(path):
     """計算檔案的 MD5 hash，用於偵測內容變動"""
     return hashlib.md5(open(path, "rb").read()).hexdigest()
