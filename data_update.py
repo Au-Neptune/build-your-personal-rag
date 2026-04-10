@@ -11,8 +11,11 @@ from dotenv import load_dotenv
 
 # 載入環境變數
 load_dotenv()
-CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL")
+
+assert CHROMA_PERSIST_DIR, "Please set CHROMA_PERSIST_DIR in .env"
+assert EMBEDDING_MODEL_NAME, "Please set EMBEDDING_MODEL in .env"
 
 def file_hash(path):
     """計算檔案的 MD5 hash，用於偵測內容變動"""
