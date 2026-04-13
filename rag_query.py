@@ -55,6 +55,52 @@ def auto_route_source(query, available_sources, client, model_name):
     except Exception as e:
         return None
 
+def rewrite_query(user_query, chat_history, client, model_name):
+    """
+    Query Rewriting: 結合歷史對話，將包含代名詞或省略主詞的簡短問題，
+    還原成一個獨立、完整、帶有明確實體名詞的問題。
+    """
+    # 如果沒有歷史紀錄，就不需要改寫
+    if not chat_history:
+        return user_query
+
+    system_prompt = """你是一個對話上下文處理專家 (Query Rewriter)。
+你的任務是根據「歷史對話紀錄」，將使用者最新的「簡短問題」或「包含代名詞的問題」，改寫成一個【完整、獨立、不需要上下文也能看懂的具體問題】。
+
+【嚴格規則】：
+1. 如果使用了代名詞（如：它、這個模型、前一個方法），請替換為歷史對話中具體的專有名詞（如：Stable Diffusion 3, DiT 架構）。
+2. 如果使用者的問題本身就已經很完整，請直接輸出原句，不要畫蛇添足。
+3. 【絕對不要】回答該問題，你只需要輸出改寫後的「問題句子」。
+4. 輸出語言必須與使用者的輸入語言一致。"""
+
+    # 取最後兩輪對話（4條訊息）避免 Context 太長模糊焦點
+    recent_history = chat_history[-4:]
+    history_text = "\n".join([f"{msg['role'].capitalize()}: {msg['content'][:150]}..." for msg in recent_history])
+
+    user_prompt = f"""【歷史對話】
+{history_text}
+
+【使用者最新問題】
+{user_query}
+
+請輸出改寫後的完整問題："""
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0 # 保持 0，我們需要穩定且保守的改寫
+        )
+        rewritten = response.choices[0].message.content.strip()
+        # 簡單防呆：如果 LLM 回傳空字串，就退回原問題
+        return rewritten if rewritten else user_query
+    except Exception as e:
+        print(f"⚠️ Query Rewriting 失敗，退回原始問題: {e}")
+        return user_query
+    
 def translate_to_english(text, client, model_name):
     """簡單的翻譯函式，將非英文問題翻譯成英文，提升檢索效果"""
     system_prompt = "你是一個專業的翻譯助手，請將以下問題翻譯成流暢的英文，請勿添加任何解釋或多餘的文字，直接輸出翻譯結果即可。"
@@ -264,7 +310,11 @@ def main():
             if not user_input.strip():
                 continue
                 
-            query_english = translate_to_english(user_input, client, args.model)
+            rewritten_query = rewrite_query(user_input, chat_history, client, args.model)
+            if rewritten_query != user_input:
+                print(f"[Query Rewriting] 偵測到上下文，已將問題還原為: {rewritten_query}")
+
+            query_english = translate_to_english(rewritten_query, client, args.model)
             expanded_queries = expand_query(query_english, client, args.model)
 
             target_source = args.source

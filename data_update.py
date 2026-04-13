@@ -146,7 +146,7 @@ def main():
         # ==========================================
         # 4. Chunking & Embedding 寫入 DB
         # ==========================================
-        chunks = chunk_text(extracted_text, chunk_size=1200, overlap=200)
+        chunks = chunk_text(extracted_text, chunk_size=800, overlap=200)
         if not chunks:
             continue
             
